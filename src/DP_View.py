@@ -719,7 +719,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			patched = list(entry)
 			patched[3] = icons.get(str(freshEntry[3]), self.unseenPic)
 			self.listViewList[index] = tuple(patched)
-			self["listview"].modifyEntry(index, tuple(patched))
+			# modifyEntry does not repaint the row on every skin/listbox
+			# combination - rebuild the visual list like the initial load does
+			self.updateList(myIndex=index)
 
 			# the pickle cache of this section is stale now
 			self.forceUpdate = True
