@@ -964,7 +964,12 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		printl("", self, "S")
 
 		printl("", self, "C")
-		return str(self.playerData[self.currentIndex]['videoData']['title'])
+		# applySkin asks for the title while the version-selection dialog is
+		# still open, i.e. before playerData is filled - never crash here
+		try:
+			return str(self.playerData[self.currentIndex]['videoData']['title'])
+		except (KeyError, TypeError, IndexError):
+			return ""
 
 	#===========================================================================
 	#
