@@ -221,7 +221,7 @@ msgstr "1920x1080, 20mbps"
 #: /hdd/workspaces/DreamPlex/src/__init__.py:301
 #: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py:248
 msgid "Movies"
-msgstr "Peliculas"
+msgstr "Películas"
 
 #: /hdd/workspaces/DreamPlex/src/__init__.py:304
 msgid "TV Shows"
@@ -264,7 +264,7 @@ msgstr "Nuevo"
 #: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py:395
 #: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py:472
 msgid "No data in this section!"
-msgstr "çSin datos en la sección!"
+msgstr "¡Sin datos en la sección!"
 
 #: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py:771
 msgid "Season"
@@ -276,7 +276,7 @@ msgstr "Pulse exit para salir"
 
 #: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py:1012
 msgid "If you are using plex.tv"
-msgstr "Si usted esta usando plex.tv"
+msgstr "Si usted está usando plex.tv"
 
 #: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py:1013
 msgid "please check if python-pyopenssl is installed."
@@ -994,23 +994,23 @@ msgstr "Recientemente Añadido"
 
 #: /hdd/workspaces/DreamPlex/src/DPH_Translations.py:50
 msgid "Recently Released"
-msgstr "Recientemente Realizado"
+msgstr "Recientemente Estrenado"
 
 #: /hdd/workspaces/DreamPlex/src/DPH_Translations.py:51
 msgid "Recently Viewed"
-msgstr "Recintemente Visualizado"
+msgstr "Recientemente Visualizado"
 
 #: /hdd/workspaces/DreamPlex/src/DPH_Translations.py:52
 msgid "Recently Viewed Episodes"
-msgstr "Episodios Recintemente Visualizados"
+msgstr "Episodios Recientemente Visualizados"
 
 #: /hdd/workspaces/DreamPlex/src/DPH_Translations.py:53
 msgid "Recently Viewed Shows"
-msgstr "Series Recintemente Visualizadas"
+msgstr "Series Recientemente Visualizadas"
 
 #: /hdd/workspaces/DreamPlex/src/DPH_Translations.py:54
 msgid "Unwatched"
-msgstr "Si  Visualizar"
+msgstr "Sin visualizar"
 
 #: /hdd/workspaces/DreamPlex/src/DPH_Translations.py:55
 msgid "On Deck"
@@ -1232,7 +1232,7 @@ msgstr "Parametros de Ubicaciones"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Settings.py:158
 msgid "> Default View for Movies"
-msgstr "> Vista por defecto para las Peliculas"
+msgstr "> Vista por defecto para las Películas"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Settings.py:159
 msgid "> Default View for Shows"
@@ -1349,7 +1349,7 @@ msgid " > State"
 msgstr "> Estado"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Server.py:387
-msgid "Toggle state to on/off to show this server in lost or not."
+msgid "Toggle state to on/off to show this server in the list or not."
 msgstr ""
 "Modificar el estado On/Off para mostrar este servidor en perdidos o no."
 
@@ -1446,7 +1446,7 @@ msgstr "Parámetros de sincronización"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Server.py:449
 msgid " > Sync Movies Medias"
-msgstr "> Sincronizar Peliculas"
+msgstr "> Sincronizar Películas"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Server.py:450
 msgid " > Sync Shows Medias"
