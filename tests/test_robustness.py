@@ -163,6 +163,35 @@ class TestManualAccessToken(RobustnessTestCase):
 		self.assertEqual(self.lastTokenHeader(), "LOCAL-TOKEN")
 
 
+class TestMultiVersionMedia(RobustnessTestCase):
+	"""An item with several <Media> children (versions) must expose the
+	parts of ALL of them, labelled with resolution/codec."""
+
+	def setUp(self):
+		RobustnessTestCase.setUp(self)
+		self.mock.add_xml("/library/metadata/1002", helpers.fixture("metadata_multiversion.xml"))
+
+	def test_all_versions_are_offered(self):
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1002", self.url("/library/sections/1/all"), False, myType="Video")
+
+		self.assertEqual(count, 2)
+		self.assertTrue(options[0][0].endswith("file-1080.mkv"))
+		self.assertTrue(options[1][0].endswith("file-4k.mkv"))
+		# version label fields
+		self.assertEqual((options[0][5], options[0][6]), ("1080", "h264"))
+		self.assertEqual((options[1][5], options[1][6]), ("4k", "hevc"))
+
+	def test_stream_preselection_still_uses_first_version(self):
+		plex = self.newPlex()
+		plex.getMediaOptionsToPlay("1002", self.url("/library/sections/1/all"), False, myType="Video")
+
+		# audio preselection parsed only from the first <Media>, as before
+		self.assertEqual(plex.streams["audioCount"], 1)
+		self.assertEqual(plex.streams["audio"].get("codec"), "ac3")
+
+
 class TestModernContainerGuards(RobustnessTestCase):
 	def test_shows_without_title2_do_not_crash(self):
 		self.mock.add_xml("/library/sections/2/recentlyAdded",

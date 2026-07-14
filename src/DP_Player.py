@@ -400,6 +400,21 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 						# this is the case when there is no information of the real file name
 						name = items[0] + " (" + items[2] + " / " + size + " / " + duration + ")"
 
+					# prefix the VERSION properties (resolution/codec/size) so
+					# multi-version items are distinguishable
+					versionBits = []
+					if len(items) > 5 and items[5]:
+						versionBits.append(str(items[5]))
+					if len(items) > 6 and items[6]:
+						versionBits.append(str(items[6]))
+					if versionBits:
+						try:
+							if items[3]:
+								versionBits.append(convertSize(int(items[3])))
+						except Exception:
+							pass
+						name = "[" + " / ".join(versionBits) + "]  " + name
+
 					printl("name " + str(name), self, "D")
 					functionList.append((name, indexCount, ))
 					indexCount += 1

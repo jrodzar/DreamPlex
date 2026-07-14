@@ -2373,21 +2373,34 @@ class PlexLibrary(Screen):
 							except:
 								pass
 			else:
-				mainContent = tree.find(myType + '/Media')  # main content
+				# every <Media> child is a playable VERSION of the item (e.g.
+				# 1080p and 4K); collect the parts of all of them so the
+				# player can offer a choice - upstream only read the first one
+				versionedParts = []
+				for mediaIndex, media in enumerate(tree.findall(myType + '/Media')):
+					for part in media.findall("Part"):
+						versionedParts.append((mediaIndex, media, part))
+
 				#Get the Parts info for media type and source selection
-				for part in mainContent.findall("Part"):
+				for mediaIndex, media, part in versionedParts:
 					printl("part.attrib: " + str(part.attrib), self, "D")
 
 					partId = part.attrib['id']  # mh
 
 					try:
-						bits = part.get('key'), part.get('file'), part.get('container'), part.get('size'), part.get('duration')
+						# indexes 0-4 are consumed by DP_Player/mediaType;
+						# 5-6 label the version in the selection dialog
+						bits = (part.get('key'), part.get('file'), part.get('container'),
+							part.get('size'), part.get('duration'),
+							media.get('videoResolution'), media.get('videoCodec'))
 						parts.append(bits)
 						partsCount += 1
 					except Exception as e:
 						printl("Error: " + str(e), self, "D")
 
-					if myType == "Video":
+					# audio/subtitle stream preselection keeps reading only the
+					# first version, exactly like before
+					if myType == "Video" and mediaIndex == 0:
 						if self.g_streamControl == "1" or self.g_streamControl == "2":
 
 							contents = "all"
