@@ -30,6 +30,11 @@ class _ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 	daemon_threads = True
 	allow_reuse_address = True
 
+	def handle_error(self, request, client_address):
+		# clients close keep-alive connections abruptly; the resulting
+		# broken pipe is expected and would only spam py2's default handler
+		pass
+
 
 class _Handler(BaseHTTPRequestHandler):
 	protocol_version = "HTTP/1.1"

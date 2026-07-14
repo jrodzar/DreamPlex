@@ -832,17 +832,25 @@ def durationToTime(duration):
 def convertSize(size):
 	printl2("", "__common__::convertSize", "S")
 
-	size_name = ("KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+	try:
+		size = int(size)
+	except (TypeError, ValueError):
+		size = 0
+
+	if size <= 0:
+		printl2("", "__common__::convertSize", "C")
+		return '0 B'
+
+	# the exponent is computed on bytes, so the table must start at bytes -
+	# otherwise every unit is shifted one step up (GB shown as TB)
+	size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
 	i = int(math.floor(math.log(size, 1024)))
+	i = min(i, len(size_name) - 1)
 	p = math.pow(1024, i)
 	s = round(size / p, 2)
 
-	if s > 0:
-		printl2("", "__common__::convertSize", "C")
-		return '%s %s' % (s, size_name[i])
-	else:
-		printl2("", "__common__::convertSize", "C")
-		return '0B'
+	printl2("", "__common__::convertSize", "C")
+	return '%s %s' % (s, size_name[i])
 
 #===========================================================================
 #
