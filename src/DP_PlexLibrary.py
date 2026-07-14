@@ -28,7 +28,6 @@ import os
 import ssl
 import socket
 import sys
-import hmac
 import traceback
 from six import PY2, PY3
 # import uuid
@@ -36,8 +35,6 @@ try:
 	import cPickle as pickle
 except:
 	import pickle
-
-from time import time
 
 try:
 	from http.client import HTTPConnection, HTTPSConnection
@@ -51,9 +48,8 @@ except:
 	from urllib import quote_plus, unquote
 	from urllib2 import urlopen, Request
 
-from base64 import b64encode, b64decode
+from base64 import b64encode
 from Components.config import config
-from hashlib import sha256
 from random import seed
 from Tools.Directories import fileExists, copyfile
 
@@ -1259,6 +1255,13 @@ class PlexLibrary(Screen):
 		#printl("aToken: " +  str(aToken), self, "D", True, 6)
 		self.g_myplex_accessTokenDict[address]["aToken"] = aToken
 
+		# keep the bare token around for URL building (playback URLs are
+		# fetched by the media player which cannot send headers)
+		rawToken = accessToken
+		if rawToken in (None, "", "None"):
+			rawToken = None
+		self.g_myplex_accessTokenDict[address]["rawToken"] = rawToken
+
 		if serverVersion is not None:
 			self.g_myplex_accessTokenDict[address]["serverVersion"] = serverVersion
 
@@ -2425,8 +2428,6 @@ class PlexLibrary(Screen):
 		# set standard playurl
 		playurl = url
 
-		token = self.get_aTokenForServer(self.server)
-
 		foundForcedSubs = False
 		subtitleFileTemp = None
 
@@ -2478,7 +2479,8 @@ class PlexLibrary(Screen):
 				playurl = self.transcode(myId, url)
 			else:
 				printl("We will be playing raw stream", self, "I")
-				playurl = url + token
+				# token as URL parameter, and never crash on a missing one
+				playurl = self.appendTokenToUrl(url, self.server)
 
 		try:
 			resume = int(int(self.streams['videoData']['viewOffset']))
@@ -2981,6 +2983,40 @@ class PlexLibrary(Screen):
 	#===========================================================================
 	#
 	#===========================================================================
+	def get_rawTokenForServer(self, server):
+		try:
+			return self.g_myplex_accessTokenDict[server].get("rawToken")
+		except Exception:
+			return None
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def appendTokenToUrl(self, url, server=None):
+		"""
+		Append X-Plex-Token to a playback URL (idempotent). Media players
+		fetch these URLs without our auth headers, so the token has to be
+		part of the URL itself.
+		"""
+		if not url:
+			return url
+
+		if "X-Plex-Token=" in url:
+			return url
+
+		if server is None:
+			server = self.getServerFromURL(url)
+
+		token = self.get_rawTokenForServer(server)
+		if not token:
+			return url
+
+		separator = "&" if "?" in url else "?"
+		return url + separator + "X-Plex-Token=" + str(token)
+
+	#===========================================================================
+	#
+	#===========================================================================
 	def get_uTokenForServer(self, server):
 		printl("", self, "S")
 
@@ -3105,13 +3141,7 @@ class PlexLibrary(Screen):
 
 		filename = '/'.join(url.split('/')[3:])
 
-		# https://blog.plex.tv/2010/12/24/happy-holidays-from-plex/
-		publicKey = "KQMIY6GATPC63AIMC4R2"
-		privateKey = "k3U6GLkZOoNIoSgjDshPErvqMIFdE0xMTx8kgsrhnC0="
-
-		streamURL = ""
 		transcode = []
-		ts = int(time())
 		if self.g_serverConfig.universalTranscoder.value:
 			videoQuality, videoResolution, maxVideoBitrate = self.getUniversalTranscoderSettings()
 			printl("Setting up HTTP Stream with universal transcoder", self, "I")
@@ -3130,11 +3160,6 @@ class PlexLibrary(Screen):
 			transcode.append("subtitleSize=100")
 			transcode.append("audioBoost=100")
 			transcode.append("waitForSegments=1")
-
-			streamParams = "%s/%s?%s" % (streamPath, streamFile, "&".join(transcode))
-
-			streamURL += "http://%s/%s" % (server, streamParams)
-			printl("Encoded HTTP Stream URL: " + str(streamURL), self, "I")
 		else:
 			printl("Setting up HTTP Stream", self, "I")
 			streamPath = "video/:/transcode/segmented"
@@ -3150,41 +3175,55 @@ class PlexLibrary(Screen):
 			transcode.append("3g=0")
 			transcode.append("httpCookies=")
 			transcode.append("userAgent=")
-			streamParams = "%s/%s?%s" % (streamPath, streamFile, "&".join(transcode))
 
-			streamURL += "http://%s/%s" % (server, streamParams)
-			printl("Encoded HTTP Stream URL: " + str(streamURL), self, "I")
+		streamParams = "%s/%s?%s" % (streamPath, streamFile, "&".join(transcode))
+		streamURL = "http://%s/%s" % (server, streamParams)
+		printl("Encoded HTTP Stream URL: " + str(streamURL), self, "I")
 
-		timestamp = "@%d" % ts
-		hw = b'/' + streamParams.encode() + timestamp.encode()
-		pac = quote_plus(b64encode(hmac.new(b64decode(privateKey), hw, digestmod=sha256).digest()).decode()).replace('+', '%20')
-
-		req = Request(streamURL, headers=getPlexHeader(self.g_sessionID))
+		# prefetch the master playlist: the PMS spins up the transcode
+		# session and answers with the media playlist location(s)
+		req = Request(self.appendTokenToUrl(streamURL, server), headers=getPlexHeader(self.g_sessionID))
 		req.add_header('X-Plex-Client-Capabilities', self.g_capability)
-		req.add_header('X-Plex-Access-Key', publicKey)
-		req.add_header('X-Plex-Access-Time', ts)
-		req.add_header('X-Plex-Access-Code', pac)
 
-		try:
-			tokenData = self.get_hTokenForServer(server)
-			req.add_header("X-Plex-Token", tokenData["X-Plex-Token"])
-		except Exception:
-			pass
+		rawToken = self.get_rawTokenForServer(server)
+		if rawToken:
+			req.add_header("X-Plex-Token", rawToken)
 
-		resp = urlopen(req)
-		if resp is None:
-			raise IOError("No response from Server")
 		urls = []
-		for line in resp:
-			if line[0] != '#':
-				urls.append("http://%s/%s/%s" % (server, streamPath, line[:-1]))
-				printl("Got: http://%s/%s/%s" % (str(server), str(streamPath), str(line[:-1])), self, "I")
-		resp.close()
+		try:
+			resp = urlopen(req)
+			try:
+				payload = resp.read()
+			finally:
+				resp.close()
 
-		indexURL = urls.pop()
-		fullURL = indexURL
+			# the response is bytes on Python 3: decode before iterating,
+			# otherwise the '#' comparison and the string formatting below
+			# silently corrupt the URL (b'...' fragments)
+			for line in payload.decode("utf-8", "replace").splitlines():
+				line = line.strip()
+				if not line or line.startswith('#'):
+					continue
 
-		#fullURL = streamURL
+				if line.startswith("http"):
+					absoluteUrl = line
+				else:
+					absoluteUrl = "http://%s/%s/%s" % (server, streamPath, line)
+
+				urls.append(absoluteUrl)
+				printl("Got: " + absoluteUrl, self, "I")
+
+		except Exception as e:
+			printl("master playlist prefetch failed: " + str(e), self, "W")
+
+		if urls:
+			fullURL = urls.pop()
+		else:
+			# hand the master playlist itself to the player;
+			# GStreamer's hlsdemux resolves it on its own
+			fullURL = streamURL
+
+		fullURL = self.appendTokenToUrl(fullURL, server)
 
 		printl("Transcoded media location URL " + fullURL, self, "I")
 
