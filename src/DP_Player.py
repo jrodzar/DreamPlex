@@ -400,6 +400,21 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 						# this is the case when there is no information of the real file name
 						name = items[0] + " (" + items[2] + " / " + size + " / " + duration + ")"
 
+					# prefix the VERSION properties (resolution/codec/size) so
+					# multi-version items are distinguishable
+					versionBits = []
+					if len(items) > 5 and items[5]:
+						versionBits.append(str(items[5]))
+					if len(items) > 6 and items[6]:
+						versionBits.append(str(items[6]))
+					if versionBits:
+						try:
+							if items[3]:
+								versionBits.append(convertSize(int(items[3])))
+						except Exception:
+							pass
+						name = "[" + " / ".join(versionBits) + "]  " + name
+
 					printl("name " + str(name), self, "D")
 					functionList.append((name, indexCount, ))
 					indexCount += 1
@@ -407,7 +422,9 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 				self.session.openWithCallback(self.setSelectedMedia, ChoiceBox, title=_("Select media to play"), list=functionList)
 
 			else:
-				self.setSelectedMedia()
+				# only one version: play it directly with an explicit choice,
+				# so a None choice can only mean "dialog cancelled"
+				self.setSelectedMedia((None, 0))
 
 			printl("", self, "C")
 
@@ -419,10 +436,21 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		result = 0
 		printl("choice: " + str(choice), self, "D")
 
-		if choice is not None:
-			result = int(choice[1])
+		if choice is None:
+			# the version dialog was cancelled (EXIT) -> go back, do not play
+			printl("selection cancelled, leaving player", self, "I")
+			self.close((False, ))
+			printl("", self, "C")
+			return
+
+		result = int(choice[1])
 
 		printl("result: " + str(result), self, "D")
+
+		# remember which VERSION was picked so the transcoder serves it too
+		selectedOption = self.options[result]
+		if len(selectedOption) > 7 and selectedOption[7] is not None:
+			Singleton().getPlexInstance().setSelectedVersion(selectedOption[7])
 
 		Singleton().getPlexInstance().setPlaybackType(str(self.playbackMode))
 
@@ -949,7 +977,12 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		printl("", self, "S")
 
 		printl("", self, "C")
-		return str(self.playerData[self.currentIndex]['videoData']['title'])
+		# applySkin asks for the title while the version-selection dialog is
+		# still open, i.e. before playerData is filled - never crash here
+		try:
+			return str(self.playerData[self.currentIndex]['videoData']['title'])
+		except (KeyError, TypeError, IndexError):
+			return ""
 
 	#===========================================================================
 	#

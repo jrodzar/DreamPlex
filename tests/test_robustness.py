@@ -163,6 +163,113 @@ class TestManualAccessToken(RobustnessTestCase):
 		self.assertEqual(self.lastTokenHeader(), "LOCAL-TOKEN")
 
 
+class TestMultiVersionMedia(RobustnessTestCase):
+	"""An item with several <Media> children (versions) must expose the
+	parts of ALL of them, labelled with resolution/codec."""
+
+	def setUp(self):
+		RobustnessTestCase.setUp(self)
+		self.mock.add_xml("/library/metadata/1002", helpers.fixture("metadata_multiversion.xml"))
+
+	def test_all_versions_are_offered(self):
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1002", self.url("/library/sections/1/all"), False, myType="Video")
+
+		self.assertEqual(count, 2)
+		self.assertTrue(options[0][0].endswith("file-1080.mkv"))
+		self.assertTrue(options[1][0].endswith("file-4k.mkv"))
+		# version label fields
+		self.assertEqual((options[0][5], options[0][6]), ("1080", "h264"))
+		self.assertEqual((options[1][5], options[1][6]), ("4k", "hevc"))
+
+	def test_options_carry_the_media_index(self):
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1002", self.url("/library/sections/1/all"), False, myType="Video")
+
+		self.assertEqual(options[0][7], 0)
+		self.assertEqual(options[1][7], 1)
+
+	def test_transcoder_receives_the_chosen_version(self):
+		self.mock.add_xml("/", helpers.fixture("server_root.xml"))
+		self.mock.add_raw("/video/:/transcode/universal/start.m3u8",
+						"application/vnd.apple.mpegurl", helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1", localAuth=True,
+						myplexToken="PT", myplexLocalToken="LT")
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1002", self.url("/library/sections/1/all"), False, myType="Video")
+
+		plex.setSelectedVersion(options[1][7])  # what DP_Player does on choice
+		url = plex.mediaType({"key": options[1][0], "file": options[1][1]}, server)
+		plex.playLibraryMedia("1002", url)
+
+		query = self.mock.requests_for("/video/:/transcode/universal/start.m3u8")[-1]["query"]
+		self.assertEqual(query.get("mediaIndex"), ["1"])
+		self.assertEqual(query.get("partIndex"), ["0"])
+
+	def test_transcoder_omits_media_index_without_selection(self):
+		self.mock.add_xml("/", helpers.fixture("server_root.xml"))
+		self.mock.add_xml("/library/metadata/1001", helpers.fixture("metadata_video.xml"))
+		self.mock.add_raw("/video/:/transcode/universal/start.m3u8",
+						"application/vnd.apple.mpegurl", helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1", localAuth=True,
+						myplexToken="PT", myplexLocalToken="LT")
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1001", self.url("/library/sections/1/all"), False, myType="Video")
+		url = plex.mediaType({"key": options[0][0], "file": options[0][1]}, server)
+		plex.playLibraryMedia("1001", url)
+
+		query = self.mock.requests_for("/video/:/transcode/universal/start.m3u8")[-1]["query"]
+		self.assertNotIn("mediaIndex", query)
+
+	def test_stream_preselection_still_uses_first_version(self):
+		plex = self.newPlex()
+		plex.getMediaOptionsToPlay("1002", self.url("/library/sections/1/all"), False, myType="Video")
+
+		# audio preselection parsed only from the first <Media>, as before
+		self.assertEqual(plex.streams["audioCount"], 1)
+		self.assertEqual(plex.streams["audio"].get("codec"), "ac3")
+
+
+class TestTrailerExtras(RobustnessTestCase):
+	"""loadExtraData=True must expose playable trailers, both from the
+	Extras subtree and from the modern primaryExtraKey reference."""
+
+	def test_extras_subtree_is_listed(self):
+		self.mock.add_xml("/library/metadata/1003", helpers.fixture("metadata_trailer_extras.xml"))
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1003", self.url("/library/sections/1/all"), False, myType="Video", loadExtraData=True)
+
+		self.assertEqual(count, 1)
+		self.assertTrue(options[0][0].endswith("delta-trailer.mp4"))
+		self.assertTrue(options[0][1].startswith("clip: Delta Movie Trailer"))
+		self.assertEqual(options[0][5], "9001")
+
+	def test_primary_extra_key_fallback(self):
+		self.mock.add_xml("/library/metadata/1004", helpers.fixture("metadata_primary_extra.xml"))
+		self.mock.add_xml("/library/metadata/9002", helpers.fixture("metadata_trailer_clip.xml"))
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1004", self.url("/library/sections/1/all"), False, myType="Video", loadExtraData=True)
+
+		self.assertEqual(count, 1)
+		self.assertTrue(options[0][0].endswith("epsilon-trailer.mp4"))
+		self.assertEqual(options[0][5], "9002")
+		# the fallback resolved the extra through its own metadata
+		self.assertEqual(len(self.mock.requests_for("/library/metadata/9002")), 1)
+
+	def test_no_extras_at_all_yields_empty(self):
+		self.mock.add_xml("/library/metadata/1001", helpers.fixture("metadata_video.xml"))
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1001", self.url("/library/sections/1/all"), False, myType="Video", loadExtraData=True)
+
+		self.assertEqual(count, 0)
+		self.assertEqual(options, [])
+
+
 class TestModernContainerGuards(RobustnessTestCase):
 	def test_shows_without_title2_do_not_crash(self):
 		self.mock.add_xml("/library/sections/2/recentlyAdded",
