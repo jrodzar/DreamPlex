@@ -65,7 +65,7 @@ from .DPH_Singleton import Singleton
 from .DPH_ScreenHelper import DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Screen, DPH_Filter
 from .DP_ViewFactory import getNoneDirectoryElements, getDefaultDirectoryElementsList, getGuiElements
 
-from .__common__ import printl2 as printl, loadPicture, durationToTime, getLiveTv, encodeThat, checkXmlFile, getXmlContent, getSkinResolution
+from .__common__ import printl2 as printl, loadPicture, durationToTime, getLiveTv, encodeThat, checkXmlFile, getXmlContent, getSkinResolution, runInThread
 from .__plugin__ import Plugin
 from .__init__ import _, defaultSkinsFolderPath  # _ is translation
 
@@ -1657,9 +1657,32 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		printl("", self, "S")
 		printl("entryData: " + str(entryData), self, "D")
 
-		# loadLibrary is a function in each class that inherits from DP_LibMain (DP_LibMovies, DP_LibSHows, DP_LibMusic)
-		libraryDataArr = self.loadLibrary(entryData, self.forceUpdate)
+		# fetching a library can take seconds (big sections, slow or
+		# unreachable server): keep it off the enigma2 main loop so the GUI
+		# never freezes while we wait
+		forceUpdate = self.forceUpdate
 		self.forceUpdate = False
+
+		runInThread(lambda: self.loadLibrary(entryData, forceUpdate), self.onLibraryLoaded)
+
+		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def onLibraryLoaded(self, libraryDataArr, error):
+		printl("", self, "S")
+
+		if error is not None:
+			printl("error while loading library: " + str(error), self, "E")
+
+		if not libraryDataArr:
+			printl("no library data", self, "W")
+			self.session.open(MessageBox, _("\n%s") % _("No data in this section!"), MessageBox.TYPE_INFO)
+			self.leaveNow()
+
+			printl("", self, "C")
+			return
 
 		# this is the content for the list (must be tuple no dict)
 		self.libraryData = libraryDataArr[0]

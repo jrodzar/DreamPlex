@@ -270,6 +270,38 @@ class TestTrailerExtras(RobustnessTestCase):
 		self.assertEqual(options, [])
 
 
+class TestRunInThread(unittest.TestCase):
+	"""Network I/O must be delivered back through a callback so it can run
+	off the enigma2 main loop (a long block there kills enigma2)."""
+
+	def test_result_is_delivered(self):
+		from src.__common__ import runInThread
+		seen = {}
+
+		def onDone(result, error):
+			seen["result"], seen["error"] = result, error
+
+		runInThread(lambda: 21 * 2, onDone)
+
+		self.assertEqual(seen["result"], 42)
+		self.assertIsNone(seen["error"])
+
+	def test_exception_is_delivered_not_raised(self):
+		from src.__common__ import runInThread
+		seen = {}
+
+		def work():
+			raise IOError("boom")
+
+		def onDone(result, error):
+			seen["result"], seen["error"] = result, error
+
+		runInThread(work, onDone)  # must not raise
+
+		self.assertIsNone(seen["result"])
+		self.assertIsInstance(seen["error"], IOError)
+
+
 class TestPlexTvUnreachable(RobustnessTestCase):
 	"""A plex.tv HTTPS failure (old box OpenSSL, network down) must not
 	crash the plugin - it should report the error and return False."""

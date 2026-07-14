@@ -31,6 +31,7 @@ import shutil
 import math
 import uuid
 import glob
+import threading
 from six import PY2
 
 from enigma import addFont, loadPNG, loadJPG, getDesktop
@@ -38,6 +39,10 @@ from skin import loadSkin
 from Components.config import config
 from Components.AVSwitch import AVSwitch
 
+try:
+	from twisted.internet import reactor
+except ImportError:
+	reactor = None
 
 from .DPH_Singleton import Singleton
 
@@ -158,6 +163,53 @@ def printl2(string, parent=None, dmode="U", obfuscate=False, steps=4):
 
 		else:
 			print("[DreamPlex] " + "OLD CHARACTER CHANGE ME !!!!!" + "  " + str(out))
+
+#===============================================================================
+#
+#===============================================================================
+
+
+def runInThread(work, onDone):
+	"""
+	Run a blocking call (network I/O) in a worker thread and deliver the
+	result back on the enigma2 main loop.
+
+	DreamPlex talks to the PMS and to plex.tv synchronously. Done on the
+	main thread that freezes the whole enigma2 GUI while a request is in
+	flight - and a long enough freeze makes enigma2 die (the image's hang
+	detector kills it), which is exactly what an unreachable plex.tv used
+	to do. Keep the callers' logic untouched, just move the waiting off
+	the main loop.
+
+	@param work: callable executed in the worker thread
+	@param onDone: callable(result, error) executed on the main loop
+	"""
+	printl2("", "__common__::runInThread", "S")
+
+	if reactor is None:
+		# no reactor (offline tests): stay synchronous
+		try:
+			onDone(work(), None)
+		except Exception as e:
+			onDone(None, e)
+
+		printl2("", "__common__::runInThread", "C")
+		return
+
+	def worker():
+		try:
+			result, error = work(), None
+		except Exception as e:
+			result, error = None, e
+
+		# hop back onto the main loop before touching any GUI state
+		reactor.callFromThread(onDone, result, error)
+
+	thread = threading.Thread(target=worker)
+	thread.daemon = True
+	thread.start()
+
+	printl2("", "__common__::runInThread", "C")
 
 #===============================================================================
 #
