@@ -1,11 +1,9 @@
-Package: DreamPlex
-Version: 2.3.0
-Description: Plex Client for Enigma2
+Package: enigma2-plugin-extensions-dreamplex
+Version: 2.3.1
+Description: Plex client for Enigma2 - fork with modern Plex Media Server fixes
 Section: extra
 Priority: optional
-Maintainer: DonDavici <dondavici@gmail.com>, jbleyel
+Maintainer: DonDavici, jbleyel, oe-alliance
 Architecture: all
-OE: dreamplex_2.3.0_all
 Homepage: https://github.com/oe-alliance/DreamPlex
-Depends: python-textutils, python-pyopenssl, curl, gstreamer1.0-plugins-bad-fragmented, mjpegtools, python-imaging, openssl
-Source:  https://github.com/oe-alliance/DreamPlex
+Source: https://github.com/oe-alliance/DreamPlex
