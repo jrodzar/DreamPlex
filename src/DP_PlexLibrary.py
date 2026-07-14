@@ -42,11 +42,12 @@ except:
 	from httplib import HTTPConnection, HTTPSConnection
 
 try:
-	from urllib.parse import quote_plus, unquote
+	from urllib.parse import quote_plus, unquote, urljoin
 	from urllib.request import urlopen, Request
 except:
 	from urllib import quote_plus, unquote
 	from urllib2 import urlopen, Request
+	from urlparse import urljoin
 
 from base64 import b64encode
 from Components.config import config
@@ -118,6 +119,7 @@ class PlexLibrary(Screen):
 	g_myplex_username = ""
 	g_myplex_password = ""
 	serverConfig_myplexToken = ""
+	serverConfig_accessToken = ""
 	g_myplex_accessToken = ""
 	g_accessTokenDictHeader = ""
 	g_accessTokenUrlHeader = ""
@@ -189,6 +191,13 @@ class PlexLibrary(Screen):
 		self.serverConfig_myplexLocalToken = str(self.g_serverConfig.myplexLocalToken.value)
 		self.serverConfig_playbackType = self.g_serverConfig.playbackType.value
 		self.serverConfig_localAuth = self.g_serverConfig.localAuth.value
+
+		# manual token; getattr keeps configs saved by older versions working
+		accessTokenConfig = getattr(self.g_serverConfig, "accessToken", None)
+		if accessTokenConfig is not None:
+			self.serverConfig_accessToken = str(accessTokenConfig.value).strip()
+		else:
+			self.serverConfig_accessToken = ""
 
 		# PLAYBACK TYPES
 		self.g_segments = self.g_serverConfig.segments.value  # is needed here because of fallback
@@ -788,7 +797,7 @@ class PlexLibrary(Screen):
 		fullList = []
 
 		# get xml from url
-		tree = self.getXmlTreeFromUrl(url)
+		tree = self.getXmlTreeFromUrlPaged(url)
 		server = str(self.getServerFromURL(url))
 		# find coressponding tags in xml
 
@@ -820,7 +829,7 @@ class PlexLibrary(Screen):
 
 				entryData['token'] = self.g_myplex_accessToken
 
-				if mediaContainer["title2"] != "By Folder":
+				if mediaContainer.get("title2", "") != "By Folder":
 					viewState = self.getViewStateForShowEntry(entryData)
 					printl("viewState: " + str(viewState), self, "D")
 
@@ -854,7 +863,7 @@ class PlexLibrary(Screen):
 		fullList = []
 
 		# get xml from url
-		tree = self.getXmlTreeFromUrl(url)
+		tree = self.getXmlTreeFromUrlPaged(url)
 		server = str(self.getServerFromURL(url))
 
 		if not tree:
@@ -892,10 +901,10 @@ class PlexLibrary(Screen):
 				entryData['token'] = self.g_myplex_accessToken
 
 				# if we are "all episodes" we do not have ratingKey - for this reason we set "key" as "ratingKey" form parent Mediacontainer but only if we are not in ByFolder mode
-				if "ratingKey" not in entryData and mediaContainer["title2"] != "By Folder":
+				if "ratingKey" not in entryData and mediaContainer.get("title2", "") != "By Folder" and "key" in mediaContainer:
 					entryData["ratingKey"] = mediaContainer["key"]
 
-				if mediaContainer["title2"] != "By Folder":
+				if mediaContainer.get("title2", "") != "By Folder":
 					viewState = self.getViewStateForShowEntry(entryData)
 				else:
 					entryData['tagType'] = "Directory"
@@ -958,7 +967,7 @@ class PlexLibrary(Screen):
 		fullList = []
 
 		# get xml from url
-		tree = self.getXmlTreeFromUrl(url)
+		tree = self.getXmlTreeFromUrlPaged(url)
 		server = str(self.getServerFromURL(url))
 
 		if not tree:
@@ -1048,7 +1057,7 @@ class PlexLibrary(Screen):
 		fullList = []
 
 		# get xml from url
-		tree = self.getXmlTreeFromUrl(url)
+		tree = self.getXmlTreeFromUrlPaged(url)
 		server = str(self.getServerFromURL(url))
 
 		if not tree:
@@ -1209,7 +1218,11 @@ class PlexLibrary(Screen):
 			# just in case we use plex.tv also in local Lan we have to set the token data
 			accessToken = None
 
-			if self.serverConfig_localAuth:
+			# precedence: manual token > local auth (plex.tv) tokens > nothing
+			if self.serverConfig_accessToken:
+				accessToken = self.serverConfig_accessToken
+
+			elif self.serverConfig_localAuth:
 				if self.serverConfig_myplexLocalToken:
 					# this is the token we get from plex.tv if we are connected with a user that is not thw owner and should be limited to its sections as well
 					#self.g_myplex_accessTokenDict[str(self.g_currentServer)] = self.serverConfig_myplexLocalToken
@@ -1552,62 +1565,90 @@ class PlexLibrary(Screen):
 	#============================================================================
 	#
 	#============================================================================
-	def doRequest(self, url, myType="GET"):
+	def doRequest(self, url, myType="GET", extraHeaders=None):
 		printl("", self, "S")
 		printl("url: " + str(url), self, "D")
-		server = self.getServerFromURL(url)
-		urlPath = self.getUrlPathFormURL(url)
-		self.urlPath = urlPath
+
+		currentUrl = url
+		redirectsLeft = 3
+		server = self.getServerFromURL(currentUrl)
 
 		try:
-			conn = HTTPConnection(server, timeout=30)
+			while True:
+				server = self.getServerFromURL(currentUrl)
+				urlPath = self.getUrlPathFormURL(currentUrl)
+				self.urlPath = urlPath
 
-			# the very first time it is none
-			# we also have to check if the server that where used changed meanwhile
-			#if self.authHeader is None or server != self.lastHeaderForServer:
+				if currentUrl.startswith("https"):
+					# same trust model as getXmlTreeFromPlex: local boxes
+					# have no CA store for the PMS certificate
+					conn = HTTPSConnection(server, timeout=30, context=ssl._create_unverified_context())
+				else:
+					conn = HTTPConnection(server, timeout=30)
 
-			authHeaderPartOne = self.get_hTokenForServer(server)
-			#print("authHeaderPartOne " + str(authHeaderPartOne))
-			self.lastHeaderForServer = server
+				# the very first time it is none
+				# we also have to check if the server that where used changed meanwhile
+				#if self.authHeader is None or server != self.lastHeaderForServer:
 
-			# if self.g_sessionID is None:
-			# 	self.g_sessionID=str(uuid.uuid4())
+				authHeaderPartOne = self.get_hTokenForServer(server)
+				#print("authHeaderPartOne " + str(authHeaderPartOne))
+				self.lastHeaderForServer = server
 
-			authHeaderPartTwo = getPlexHeader(self.g_sessionID)
+				# if self.g_sessionID is None:
+				# 	self.g_sessionID=str(uuid.uuid4())
 
-			if authHeaderPartOne and authHeaderPartTwo:
-				self.authHeader = dict(list(authHeaderPartOne.items()) + list(authHeaderPartTwo.items()))
-			elif authHeaderPartTwo:
-				self.authHeader = dict(list(authHeaderPartTwo.items()))
-			else:
-				self.authHeader = {}
-			#printl("header: " + str(self.authHeader), self, "D")
-			conn.request(myType, urlPath, headers=self.authHeader)
+				authHeaderPartTwo = getPlexHeader(self.g_sessionID)
 
-			data = conn.getresponse()
+				if authHeaderPartOne and authHeaderPartTwo:
+					self.authHeader = dict(list(authHeaderPartOne.items()) + list(authHeaderPartTwo.items()))
+				elif authHeaderPartTwo:
+					self.authHeader = dict(list(authHeaderPartTwo.items()))
+				else:
+					self.authHeader = {}
 
-			if (int(data.status) == 301) or (int(data.status) == 302):
-				printl("status 301 or 302 found", self, "I")
+				if extraHeaders:
+					self.authHeader.update(extraHeaders)
 
-				data = data.getheader('Location')
-				printl("data: " + str(data), self, "I")
+				#printl("header: " + str(self.authHeader), self, "D")
+				conn.request(myType, urlPath, headers=self.authHeader)
 
-				printl("", self, "C")
-				return data
+				data = conn.getresponse()
+				status = int(data.status)
 
-			elif int(data.status) >= 400:
-				error = "HTTP response error: " + str(data.status) + " " + str(data.reason)
-				printl(error, self, "D")
-				self.lastError = error
+				if status in (301, 302, 303, 307, 308):
+					location = data.getheader('Location')
+					printl("status %d, following Location: %s" % (status, str(location)), self, "I")
 
-				printl("", self, "C")
-				return False
+					if not location or redirectsLeft <= 0:
+						error = "HTTP redirect error: " + str(status) + " at " + str(currentUrl)
+						printl(error, self, "D")
+						self.lastError = error
 
-			else:
-				link = data.read()
+						printl("", self, "C")
+						return False
 
-				printl("", self, "C")
-				return link
+					redirectsLeft -= 1
+					# Location may be absolute or relative
+					currentUrl = urljoin(currentUrl, location)
+
+					if status == 303:
+						myType = "GET"
+
+					continue
+
+				elif status >= 400:
+					error = "HTTP response error: " + str(data.status) + " " + str(data.reason)
+					printl(error, self, "D")
+					self.lastError = error
+
+					printl("", self, "C")
+					return False
+
+				else:
+					link = data.read()
+
+					printl("", self, "C")
+					return link
 
 		except socket.gaierror:
 			error = 'Unable to lookup host: ' + server + "\nCheck host name is correct"
@@ -2674,10 +2715,72 @@ class PlexLibrary(Screen):
 
 			printl("", self, "C")
 			return tree
-		except Exception:
+		except Exception as e:
+			printl("no parseable xml payload from " + str(url), self, "W")
+			printl("parse error: " + str(e), self, "D")
+			try:
+				printl("payload was: " + repr(html)[:300], self, "D")
+			except Exception:
+				pass
 
 			printl("", self, "C")
 			return self.getFakeXml()
+
+	#===============================================================================
+	#
+	#===============================================================================
+	def getXmlTreeFromUrlPaged(self, url, pageSize=200):
+		"""
+		Fetch a container page by page using the X-Plex-Container-Start/Size
+		headers and merge all children into one tree. Servers that ignore
+		paging (no totalSize in the answer) are handled with one request.
+		"""
+		printl("", self, "S")
+		printl("url: " + str(url), self, "D")
+
+		mergedTree = None
+		start = 0
+
+		while True:
+			pagingHeaders = {
+				"X-Plex-Container-Start": str(start),
+				"X-Plex-Container-Size": str(pageSize),
+			}
+			html = self.doRequest(url, extraHeaders=pagingHeaders)
+
+			try:
+				tree = etree.fromstring(html)
+			except Exception as e:
+				printl("no parseable xml payload at offset %d from %s" % (start, str(url)), self, "W")
+				printl("parse error: " + str(e), self, "D")
+				break
+
+			if mergedTree is None:
+				mergedTree = tree
+			else:
+				mergedTree.extend(list(tree))
+
+			pageItemCount = len(tree)
+			totalSize = tree.get("totalSize")
+
+			if totalSize is None:
+				# server ignored the paging headers and answered everything
+				break
+
+			start += pageSize
+
+			if pageItemCount == 0 or start >= int(totalSize):
+				break
+
+		if mergedTree is None:
+			printl("", self, "C")
+			return self.getFakeXml()
+
+		mergedTree.set("size", str(len(mergedTree)))
+
+		printl("merged %d children" % len(mergedTree), self, "D")
+		printl("", self, "C")
+		return mergedTree
 
 	#===============================================================================
 	#

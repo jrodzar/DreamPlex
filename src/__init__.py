@@ -207,6 +207,8 @@ def initServerEntryConfig():
 	config.plugins.dreamplex.Entries[i].myplexPin = ConfigPIN(default=0000)
 	config.plugins.dreamplex.Entries[i].myplexToken = ConfigText(visible_width=50, fixed_size=False)
 	config.plugins.dreamplex.Entries[i].myplexLocalToken = ConfigText(visible_width=50, fixed_size=False)
+	# manually entered X-Plex-Token, wins over any other token source
+	config.plugins.dreamplex.Entries[i].accessToken = ConfigText(visible_width=50, fixed_size=False)
 	config.plugins.dreamplex.Entries[i].myplexTokenUsername = ConfigText(visible_width=50, fixed_size=False)
 	config.plugins.dreamplex.Entries[i].myplexHomeUsers = ConfigYesNo()
 	config.plugins.dreamplex.Entries[i].protectSettings = ConfigYesNo()

@@ -453,6 +453,8 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 			else:
 				self.cfglist.append(getConfigListEntry(_(" >> DNS"), self.current.dns, _(" ")))
 				self.cfglist.append(getConfigListEntry(_(" >> Port"), self.current.port, _(" ")))
+			if getattr(self.current, "accessToken", None) is not None:
+				self.cfglist.append(getConfigListEntry(_(" > Access Token (optional)"), self.current.accessToken, _("X-Plex-Token used to authenticate against this server. Overrides local authentication and plex.tv tokens.")))
 			if self.current.localAuth.value:
 				self.addMyPlexSettings()
 
