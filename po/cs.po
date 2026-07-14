@@ -443,7 +443,7 @@ msgid " > State"
 msgstr " > Stav"
 
 #: e:\Development\GitHub\DreamPlex\src/DP_Settings.py:552
-msgid "Toggle state to on/off to show this server in lost or not."
+msgid "Toggle state to on/off to show this server in the list or not."
 msgstr "Přepnout stav zapnout / vypnout, zda se server ztratil nebo ne."
 
 #: e:\Development\GitHub\DreamPlex\src/DP_Settings.py:553

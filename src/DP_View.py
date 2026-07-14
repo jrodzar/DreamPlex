@@ -1675,7 +1675,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			printl("currentViewMode: " + str(self.currentViewMode), self, "D")
 			self.processSubViewElements(myType=self.currentViewMode)
 		else:
-			text = "You have no data in this section!"
+			text = _("No data in this section!")
 			self.session.open(MessageBox, _("\n%s") % text, MessageBox.TYPE_INFO)
 			self.leaveNow()
 

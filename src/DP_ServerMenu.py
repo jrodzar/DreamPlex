@@ -332,7 +332,7 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 #				else:
 				self.switchUser()
 			else:
-				self.session.open(MessageBox, "The pin was wrong! Abort user switiching.", MessageBox.TYPE_INFO)
+				self.session.open(MessageBox, "The pin was wrong! Aborting user switch.", MessageBox.TYPE_INFO)
 
 		printl("", self, "C")
 
