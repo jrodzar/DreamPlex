@@ -2797,22 +2797,34 @@ class PlexLibrary(Screen):
 		myplex_header = getPlexHeader(self.g_sessionID)
 		myplex_header['X-Plex-Token'] = str(self.serverConfig_myplexToken)
 
-		# talking to plex.tv over HTTPS can fail (network down, or an old
-		# box whose OpenSSL cannot negotiate with modern plex.tv/Cloudflare);
-		# never let that crash the plugin - report it instead
-		try:
-			conn = HTTPSConnection(PLEXTV_SERVER, timeout=30, port=443, context=ssl._create_unverified_context())
-			conn.request(url=url, method=requestType, headers=myplex_header)
-			data = conn.getresponse()
-			response = data.read()
-		except (ssl.SSLError, socket.error) as e:
-			self.lastError = _("Could not reach plex.tv:\n%s\n\nTip: use an IP connection with an Access Token instead.") % str(e)
-			printl("plex.tv connection failed: " + str(e), self, "W")
-			printl("", self, "C")
-			return False
-		except Exception as e:
-			self.lastError = _("plex.tv error:\n%s") % str(e)
-			printl("plex.tv unexpected error: " + str(e), self, "W")
+		# talking to plex.tv over HTTPS can fail or be flaky: plex.tv is a
+		# round-robin of AWS IPs and some may be unreachable from a given
+		# network, so a single attempt can hit a dead IP. Retry a couple of
+		# times (fresh DNS each time) and never let a failure crash the
+		# plugin - report it instead.
+		response = None
+		lastException = None
+		for attempt in range(3):
+			try:
+				conn = HTTPSConnection(PLEXTV_SERVER, timeout=15, port=443, context=ssl._create_unverified_context())
+				conn.request(url=url, method=requestType, headers=myplex_header)
+				data = conn.getresponse()
+				response = data.read()
+				break
+			except (ssl.SSLError, socket.error) as e:
+				lastException = e
+				printl("plex.tv attempt %d failed: %s" % (attempt + 1, str(e)), self, "W")
+				try:
+					conn.close()
+				except Exception:
+					pass
+			except Exception as e:
+				lastException = e
+				printl("plex.tv unexpected error: " + str(e), self, "W")
+				break
+
+		if response is None:
+			self.lastError = _("Could not reach plex.tv:\n%s\n\nTip: use an IP connection with an Access Token instead.") % str(lastException)
 			printl("", self, "C")
 			return False
 

@@ -128,12 +128,14 @@ Known limitations
 * The `/library/sections/<id>/search?type=N` endpoint is kept for the Search
   entries; on servers where it ever disappears the search entry would come
   back empty (the filter/browse entries are unaffected).
-* **Old images (e.g. OpenATV 6.4) may fail to reach plex.tv.** Their
-  OpenSSL (1.0.2r in 6.4) can no longer complete the TLS handshake with
-  plex.tv behind Cloudflare, so a *plex.tv* connection type times out. This
-  is the box, not the plugin — the plugin now reports it instead of
-  crashing. Workaround: use an **IP/DNS** connection to the server with the
-  **Access Token** field filled; direct HTTP to the PMS works fine.
+* **Some boxes/networks cannot reach plex.tv reliably.** plex.tv is a
+  round-robin of AWS IPs; on some networks part of that pool is
+  unreachable or the connection is flaky, so a *plex.tv* connection type
+  can time out (the box's plain TLS to other hosts is fine — this is
+  network reachability to plex.tv, not OpenSSL). The plugin now retries and
+  reports the error instead of crashing. Reliable workaround: use an
+  **IP/DNS** connection to the server with the **Access Token** field
+  filled — direct HTTP to the PMS is unaffected.
 
 Development
 -----------
