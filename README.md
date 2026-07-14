@@ -151,3 +151,9 @@ GPL-2 (see `src/LICENSE.txt`), like the original. DreamPlex was written by
 the **oe-alliance** / OpenViX teams, with parts based on hippojay's plexbmc.
 This fork only fixes compatibility with modern Plex Media Server releases;
 all credit for the plugin itself belongs to the original authors.
+
+The modern-PMS fixes in this fork - root-cause analysis against a live
+server, the offline test harness, the fixes themselves and the on-receiver
+verification - were researched, implemented and tested by **Claude**
+(Anthropic's Claude Fable 5 model), directed by **jrodzar**. Every commit
+carries the corresponding `Co-Authored-By` trailer.
