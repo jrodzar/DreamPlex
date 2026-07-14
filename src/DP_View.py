@@ -65,7 +65,7 @@ from .DPH_Singleton import Singleton
 from .DPH_ScreenHelper import DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Screen, DPH_Filter
 from .DP_ViewFactory import getNoneDirectoryElements, getDefaultDirectoryElementsList, getGuiElements
 
-from .__common__ import printl2 as printl, loadPicture, durationToTime, getLiveTv, encodeThat, checkXmlFile, getXmlContent, getSkinResolution
+from .__common__ import printl2 as printl, loadPicture, durationToTime, getLiveTv, encodeThat, checkXmlFile, getXmlContent, getSkinResolution, runInThread, fireAndForget
 from .__plugin__ import Plugin
 from .__init__ import _, defaultSkinsFolderPath  # _ is translation
 
@@ -565,9 +565,19 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			media_id = selection[1]['ratingKey']
 			server = selection[1]['server']
 
-			count, options, server = Singleton().getPlexInstance().getMediaOptionsToPlay(media_id, server, False, myType=selection[1]['tagType'], loadExtraData=True)
+			# looking up the extras is a server round trip: off the main loop
+			def work():
+				return Singleton().getPlexInstance().getMediaOptionsToPlay(media_id, server, False, myType=selection[1]['tagType'], loadExtraData=True)
 
-			self.selectMedia(count, options, server)
+			def onDone(mediaOptions, error):
+				if error is not None or not mediaOptions:
+					printl("could not load extras: " + str(error), self, "W")
+					self.session.open(MessageBox, (_("No extras found ...\n\nPress exit to return.")), MessageBox.TYPE_INFO)
+					return
+				count, options, extraServer = mediaOptions
+				self.selectMedia(count, options, extraServer)
+
+			runInThread(work, onDone)
 
 		elif self.serverConfig.loadExtraData.value == "2":
 			try:
@@ -698,12 +708,35 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 			plexInstance = Singleton().getPlexInstance()
 			url = "%s://%s/library/metadata/%s" % (plexInstance.http, entryData["server"], entryData["ratingKey"])
-			freshList, mediaContainer = plexInstance.getMoviesFromSection(url)
 
+			# fetch off the main loop, then patch the row in the callback
+			runInThread(lambda: plexInstance.getMoviesFromSection(url),
+					lambda result, error: self.applyRefreshedViewState(index, result, error))
+
+		except Exception as e:
+			printl("could not refresh entry view state: " + str(e), self, "W")
+
+		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def applyRefreshedViewState(self, index, result, error):
+		printl("", self, "S")
+
+		try:
+			if error is not None:
+				printl("could not refresh entry view state: " + str(error), self, "W")
+				printl("", self, "C")
+				return
+
+			freshList = result[0] if result else None
 			if not freshList:
 				printl("", self, "C")
 				return
 
+			entry = self.listViewList[index]
+			entryData = entry[1]
 			freshEntry = freshList[0]
 			freshData = freshEntry[1]
 
@@ -1657,9 +1690,32 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		printl("", self, "S")
 		printl("entryData: " + str(entryData), self, "D")
 
-		# loadLibrary is a function in each class that inherits from DP_LibMain (DP_LibMovies, DP_LibSHows, DP_LibMusic)
-		libraryDataArr = self.loadLibrary(entryData, self.forceUpdate)
+		# fetching a library can take seconds (big sections, slow or
+		# unreachable server): keep it off the enigma2 main loop so the GUI
+		# never freezes while we wait
+		forceUpdate = self.forceUpdate
 		self.forceUpdate = False
+
+		runInThread(lambda: self.loadLibrary(entryData, forceUpdate), self.onLibraryLoaded)
+
+		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def onLibraryLoaded(self, libraryDataArr, error):
+		printl("", self, "S")
+
+		if error is not None:
+			printl("error while loading library: " + str(error), self, "E")
+
+		if not libraryDataArr:
+			printl("no library data", self, "W")
+			self.session.open(MessageBox, _("\n%s") % _("No data in this section!"), MessageBox.TYPE_INFO)
+			self.leaveNow()
+
+			printl("", self, "C")
+			return
 
 		# this is the content for the list (must be tuple no dict)
 		self.libraryData = libraryDataArr[0]
@@ -2323,7 +2379,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		printl("", self, "S")
 		self.forceUpdate = True
 
-		Singleton().getPlexInstance().doRequest(self.unseenUrl)
+		# tell the server in the background: the icon is patched locally
+		# anyway, so there is no reason to freeze the GUI for the answer
+		fireAndForget(lambda url=self.unseenUrl: Singleton().getPlexInstance().doRequest(url))
 
 		currentIndex = self["listview"].getIndex()
 		currentSelection = self["listview"].getCurrent()
@@ -2347,7 +2405,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		printl("", self, "S")
 		self.forceUpdate = True
 
-		Singleton().getPlexInstance().doRequest(self.seenUrl)
+		# tell the server in the background: the icon is patched locally
+		# anyway, so there is no reason to freeze the GUI for the answer
+		fireAndForget(lambda url=self.seenUrl: Singleton().getPlexInstance().doRequest(url))
 
 		currentIndex = self["listview"].getIndex()
 		currentSelection = self["listview"].getCurrent()
@@ -2372,7 +2432,8 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		self.forceUpdate = True
 
 		if not self.isFolder:
-			Singleton().getPlexInstance().doRequest(self.refreshUrl)
+			# the server rescans asynchronously anyway, we do not wait for it
+			fireAndForget(lambda url=self.refreshUrl: Singleton().getPlexInstance().doRequest(url))
 			self.getViewListData()
 
 		printl("", self, "C")
@@ -2394,8 +2455,13 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		printl("", self, "S")
 
 		if confirm:
-			Singleton().getPlexInstance().doRequest(self.deleteUrl)
-			self.getViewListData()
+			# the list may only be reloaded once the delete went through
+			def onDeleted(result, error):
+				if error is not None:
+					printl("delete failed: " + str(error), self, "E")
+				self.getViewListData()
+
+			runInThread(lambda url=self.deleteUrl: Singleton().getPlexInstance().doRequest(url), onDeleted)
 		else:
 			self.session.open(MessageBox, _("Deleting aborted!"), MessageBox.TYPE_INFO)
 

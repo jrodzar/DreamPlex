@@ -64,7 +64,7 @@ from .DPH_Singleton import Singleton
 #from .DP_Summary import DreamplexPlayerSummary
 from .DPH_ScreenHelper import DPH_ScreenHelper
 
-from .__common__ import printl2 as printl, convertSize, encodeThat
+from .__common__ import printl2 as printl, convertSize, encodeThat, runInThread, fireAndForget
 from .__init__ import _  # _ is translation
 
 
@@ -364,7 +364,29 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 		self.setPoster()
 
-		self.count, self.options, self.server = Singleton().getPlexInstance().getMediaOptionsToPlay(self.media_id, server, False, myType=selection[1]['tagType'])
+		# asking the server for the media options is a network round trip:
+		# keep it off the enigma2 main loop so the GUI cannot freeze
+		def work():
+			return Singleton().getPlexInstance().getMediaOptionsToPlay(self.media_id, server, False, myType=selection[1]['tagType'])
+
+		runInThread(work, self.onMediaOptionsReady)
+
+		printl("", self, "C")
+
+	#===========================================================
+	#
+	#===========================================================
+	def onMediaOptionsReady(self, mediaOptions, error):
+		printl("", self, "S")
+
+		if error is not None or not mediaOptions:
+			printl("could not get media options: " + str(error), self, "E")
+			self.session.open(MessageBox, (_("Error:") + "\n%s") % str(error), MessageBox.TYPE_INFO)
+
+			printl("", self, "C")
+			return
+
+		self.count, self.options, self.server = mediaOptions
 
 		self.selectMedia(self.count, self.options, self.server)
 
@@ -467,7 +489,29 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	def buildPlayerData(self, mediaFileUrl, isExtraData=False):
 		printl("", self, "S")
 
-		self.playerData[self.currentIndex] = Singleton().getPlexInstance().playLibraryMedia(self.media_id, mediaFileUrl, isExtraData=isExtraData)
+		# playLibraryMedia talks to the server (and starting a transcode
+		# session can take seconds): off the main loop it goes
+		def work():
+			return Singleton().getPlexInstance().playLibraryMedia(self.media_id, mediaFileUrl, isExtraData=isExtraData)
+
+		runInThread(work, self.onPlayerDataReady)
+
+		printl("", self, "C")
+
+	#===============================================================================
+	#
+	#===============================================================================
+	def onPlayerDataReady(self, playerData, error):
+		printl("", self, "S")
+
+		if error is not None or not playerData:
+			printl("could not build player data: " + str(error), self, "E")
+			self.session.open(MessageBox, (_("Error:") + "\n%s") % str(error), MessageBox.TYPE_INFO)
+
+			printl("", self, "C")
+			return
+
+		self.playerData[self.currentIndex] = playerData
 
 		# populate addional data
 		self.setPlayerData()
@@ -1360,12 +1404,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 				progress = 100
 				printl("End of file reached", self, "D")
 
+			# the reports below are sent while leaving the player: we do not
+			# need their answer, so never block the GUI waiting for them
 			if self.timelineWatcher is not None:
 				self.timelineWatcher.stop()
 
 				urlPath = self.server + "/:/timeline?containerKey=/library/sections/onDeck&key=/library/metadata/" + self.id + "&ratingKey=" + self.id
 				urlPath += "&state=stopped&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
-				self.plexInstance.doRequest(urlPath)
+				fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
 
 			#Legacy PMS Server server support before MultiUser version v0.9.8.0 and if we are not connected via plex.tv
 			else:
@@ -1378,12 +1424,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 				#If we are less than 95% complete, store resume time
 				elif progress < 95:
 					printl("Less than 95% progress, will store resume time", self, "I")
-					self.plexInstance.doRequest(http + "://" + self.server + "/:/progress?key=" + self.id + "&identifier=com.plexapp.plugins.library&time=" + str(currentTime * 1000))
+					progressUrl = http + "://" + self.server + "/:/progress?key=" + self.id + "&identifier=com.plexapp.plugins.library&time=" + str(currentTime * 1000)
+					fireAndForget(lambda url=progressUrl: self.plexInstance.doRequest(url))
 
 				#Otherwise, mark as watched
 				else:
 					printl("Movie marked as watched. Over 95% complete", self, "I")
-					self.plexInstance.doRequest(http + "://" + self.server + "/:/scrobble?key=" + self.id + "&identifier=com.plexapp.plugins.library")
+					scrobbleUrl = http + "://" + self.server + "/:/scrobble?key=" + self.id + "&identifier=com.plexapp.plugins.library"
+					fireAndForget(lambda url=scrobbleUrl: self.plexInstance.doRequest(url))
 
 		except:
 			printl("no progress data maybe playback never started, returning ...", self, "D")
@@ -1397,8 +1445,10 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	def keepTranscoderAlive(self):
 		printl("", self, "S")
 
+		# periodic ping: must not stall playback if the server is slow
 		http = self.plexInstance.http
-		self.plexInstance.doRequest(http + "://" + self.server + "/video/:/transcode/universal/ping?session=" + self.transcodingSession)
+		pingUrl = http + "://" + self.server + "/video/:/transcode/universal/ping?session=" + self.transcodingSession
+		fireAndForget(lambda url=pingUrl: self.plexInstance.doRequest(url))
 
 		printl("", self, "C")
 
@@ -1408,11 +1458,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	def stopTranscoding(self):
 		printl("", self, "S")
 
+		# sent while leaving playback: no answer needed, never block on it
 		http = self.plexInstance.http
 		if self.universalTranscoder:
-			self.plexInstance.doRequest(http + "://" + self.server + "/video/:/transcode/universal/stop?session=" + self.transcodingSession)
+			stopUrl = http + "://" + self.server + "/video/:/transcode/universal/stop?session=" + self.transcodingSession
 		else:
-			self.plexInstance.doRequest(http + "://" + self.server + "/video/:/transcode/segmented/stop?session=" + self.transcodingSession)
+			stopUrl = http + "://" + self.server + "/video/:/transcode/segmented/stop?session=" + self.transcodingSession
+
+		fireAndForget(lambda url=stopUrl: self.plexInstance.doRequest(url))
 
 		printl("", self, "C")
 
@@ -1485,15 +1538,17 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 				seekState = self.seekstate
 
+				# this runs on a timer WHILE playing: a slow server here would
+				# stutter the GUI on every tick, so fire it in the background
 				if seekState == self.SEEK_STATE_PAUSE:
 					printl("Movies PAUSED time: %s secs of %s @ %s%%" % (currentTime, totalTime, progress), self, "D")
 					urlPath += "&state=paused&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
-					self.plexInstance.doRequest(urlPath)
+					fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
 
 				elif seekState == self.SEEK_STATE_PLAY:
 					printl("Movies PLAYING time: %s secs of %s @ %s%%" % (currentTime, totalTime, progress), self, "D")
 					urlPath += "&state=playing&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
-					self.plexInstance.doRequest(urlPath)
+					fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
 
 				# todo add buffering here if needed
 					#urlPath += "&state=buffering&time=" + str(currentTime*1000)
