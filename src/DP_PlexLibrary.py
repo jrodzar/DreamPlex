@@ -174,6 +174,9 @@ class PlexLibrary(Screen):
 		self.g_error = False
 		printl("running on " + str(sys.version_info), self, "I")
 
+		# per-address cache of section uuid -> numeric section id
+		self.g_sectionKeyMaps = {}
+
 		# global serverConfig
 		self.g_serverConfig = serverConfig
 
@@ -443,6 +446,11 @@ class PlexLibrary(Screen):
 
 						# finally we set AccessTokenHeader
 						self.setAccessTokenHeader(address=str(entryData.get('address')), accessToken=str(entryData.get('accessToken', None)), serverVersion=str(entryData.get('serverVersion')))
+
+						# modern plex.tv announces 'path'/'key' as a bare
+						# per-share hash the PMS itself does not accept;
+						# resolve it to the server's numeric section id
+						entryData["path"] = self.resolveSectionPath(entryData)
 					else:
 						entryData["path"] = "/library/sections/" + entryData.get('key')
 						entryData["address"] = str(self.g_host + ":" + self.serverConfig_port)
@@ -543,6 +551,53 @@ class PlexLibrary(Screen):
 
 		printl("", self, "C")
 		return fullList
+
+	#=============================================================================
+	#
+	#=============================================================================
+	def resolveSectionPath(self, entryData):
+		"""
+		Old plex.tv answers carried path="/library/sections/<numeric id>".
+		Modern ones only ship a bare per-share hash (e.g. "21b946...") in
+		'path'/'key', which the PMS itself answers with 404. Resolve the
+		numeric id by matching the section uuid against the server's own
+		/library/sections listing (one request per server, cached).
+		"""
+		printl("", self, "S")
+
+		path = str(entryData.get("path", ""))
+		if path.startswith("/"):
+			# legacy plex.tv format, nothing to resolve
+			printl("", self, "C")
+			return path
+
+		address = str(entryData["address"])
+
+		if address not in self.g_sectionKeyMaps:
+			mapping = {}
+			tree = self.getXmlTreeFromUrl("%s://%s/library/sections" % (self.http, address))
+			if tree is not None:
+				for directory in tree.findall("Directory"):
+					uuid = directory.get("uuid")
+					key = directory.get("key")
+					if uuid and key:
+						mapping[uuid] = key
+			self.g_sectionKeyMaps[address] = mapping
+			printl("section key map for %s: %s" % (address, str(mapping)), self, "D")
+
+		numericKey = self.g_sectionKeyMaps[address].get(entryData.get("uuid"))
+
+		if numericKey:
+			entryData["key"] = numericKey
+			printl("resolved section '%s' to numeric key %s" % (str(entryData.get("title")), numericKey), self, "D")
+			printl("", self, "C")
+			return "/library/sections/" + numericKey
+
+		# last resort: prefix whatever key we have so the URL is well-formed
+		fallbackKey = str(entryData.get("key") or path or "0")
+		printl("no numeric key for section uuid %s, using %s" % (str(entryData.get("uuid")), fallbackKey), self, "W")
+		printl("", self, "C")
+		return "/library/sections/" + fallbackKey
 
 	#=============================================================================
 	#

@@ -161,6 +161,55 @@ class TestSynthesizedMusicMenu(SectionFilterTestCase):
 		self.assertEqual(search[3]["contentUrl"], root + "/search?type=8")
 
 
+class TestPlexTvSectionPathResolution(SectionFilterTestCase):
+	"""Modern plex.tv announces shared sections with a bare hash in
+	path/key; the PMS only accepts its numeric ids (matched by uuid)."""
+
+	def entryFor(self, uuid, key="21b94632c20c74126011be2ba86ef09d"):
+		return {
+			"title": "Documentals",
+			"address": self.mock.address,
+			"path": key,
+			"key": key,
+			"uuid": uuid,
+		}
+
+	def test_modern_hash_path_is_resolved_to_numeric_id(self):
+		plex = self.newPlex()
+		entryData = self.entryFor("11111111-1111-1111-1111-111111111111")
+
+		path = plex.resolveSectionPath(entryData)
+
+		self.assertEqual(path, "/library/sections/1")
+		self.assertEqual(entryData["key"], "1")
+
+	def test_legacy_path_is_kept_without_any_request(self):
+		plex = self.newPlex()
+		entryData = self.entryFor("11111111-1111-1111-1111-111111111111")
+		entryData["path"] = "/library/sections/12"
+
+		path = plex.resolveSectionPath(entryData)
+
+		self.assertEqual(path, "/library/sections/12")
+		self.assertEqual(len(self.mock.requests_for("/library/sections")), 0)
+
+	def test_mapping_is_fetched_once_per_server(self):
+		plex = self.newPlex()
+		plex.resolveSectionPath(self.entryFor("11111111-1111-1111-1111-111111111111"))
+		path = plex.resolveSectionPath(self.entryFor("22222222-2222-2222-2222-222222222222", key="deadbeef"))
+
+		self.assertEqual(path, "/library/sections/2")
+		self.assertEqual(len(self.mock.requests_for("/library/sections")), 1)
+
+	def test_unknown_uuid_falls_back_to_wellformed_url(self):
+		plex = self.newPlex()
+		entryData = self.entryFor("99999999-9999-9999-9999-999999999999", key="cafebabe")
+
+		path = plex.resolveSectionPath(entryData)
+
+		self.assertEqual(path, "/library/sections/cafebabe")
+
+
 class TestNoSynthesisCases(SectionFilterTestCase):
 	def test_legacy_server_menu_is_passed_through(self):
 		self.mock.add_xml("/library/sections/1", helpers.fixture("section_root_legacy.xml"))
