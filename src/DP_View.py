@@ -2330,7 +2330,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		myList = list(currentSelection)
 		myList[3] = self.unseenPic
 		myList[1]["viewCount"] = 0
-		self["listview"].modifyEntry(currentIndex, tuple(myList))
+		self.listViewList[currentIndex] = tuple(myList)
+		# modifyEntry does not repaint the row everywhere, rebuild the list
+		self.updateList(myIndex=currentIndex)
 
 		self.seen = False
 
@@ -2352,7 +2354,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		myList = list(currentSelection)
 		myList[3] = self.seenPic
 		myList[1]["viewCount"] = 1
-		self["listview"].modifyEntry(currentIndex, tuple(myList))
+		self.listViewList[currentIndex] = tuple(myList)
+		# modifyEntry does not repaint the row everywhere, rebuild the list
+		self.updateList(myIndex=currentIndex)
 
 		self.seen = True
 
