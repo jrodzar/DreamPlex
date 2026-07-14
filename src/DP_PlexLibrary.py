@@ -2363,15 +2363,40 @@ class PlexLibrary(Screen):
 
 			if loadExtraData:
 				extraContent = tree.find(myType + '/Extras')  # extra content
-				for video in extraContent.findall("Video"):
-					for media in video.findall("Media"):
-						for part in media.findall("Part"):
-							try:
-								bits = part.get('key'), video.get("type") + ": " + video.get("title") + " (" + media.get("width") + "x" + media.get("height") + ")", part.get('container'), video.get("type"), video.get("duration"), video.get("ratingKey")
-								parts.append(bits)
-								partsCount += 1
-							except:
-								pass
+				if extraContent is not None:
+					for video in extraContent.findall("Video"):
+						for media in video.findall("Media"):
+							for part in media.findall("Part"):
+								try:
+									# cloud extras have no width/height, keep them anyway
+									label = str(video.get("type", "extra")) + ": " + str(video.get("title", ""))
+									if media.get("width") and media.get("height"):
+										label += " (" + media.get("width") + "x" + media.get("height") + ")"
+									bits = (part.get('key'), label, part.get('container'),
+										video.get("type"), video.get("duration"), video.get("ratingKey"))
+									parts.append(bits)
+									partsCount += 1
+								except Exception as e:
+									printl("skipping unparseable extra: " + str(e), self, "D")
+
+				# modern PMS references the main trailer via primaryExtraKey;
+				# resolve it when the Extras subtree gave nothing playable
+				if partsCount == 0:
+					primaryExtraKey = fromVideo.get('primaryExtraKey')
+					if primaryExtraKey:
+						extraId = str(primaryExtraKey).rstrip('/').split('/')[-1]
+						extraTree = self.getStreamDataById(server, extraId)
+						try:
+							extraVideo = extraTree.find('Video')
+							extraPart = extraTree.find('Video/Media/Part')
+							bits = (extraPart.get('key'),
+								str(extraVideo.get('type', 'trailer')) + ": " + str(extraVideo.get('title', '')),
+								extraPart.get('container'), extraVideo.get('type', 'clip'),
+								extraVideo.get('duration'), extraVideo.get('ratingKey', extraId))
+							parts.append(bits)
+							partsCount += 1
+						except Exception as e:
+							printl("primaryExtraKey not playable: " + str(e), self, "W")
 			else:
 				# every <Media> child is a playable VERSION of the item (e.g.
 				# 1080p and 4K); collect the parts of all of them so the

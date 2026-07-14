@@ -610,7 +610,10 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 				self.session.openWithCallback(self.setSelectedMedia, ChoiceBox, title=_("Select media to play"), list=functionList)
 
 			else:
-				self.setSelectedMedia()
+				# a single extra (the usual case: one trailer) never played
+				# because setSelectedMedia() bailed out on choice=None
+				items = self.options[0]
+				self.setSelectedMedia((items[1], 0, items[0], items[5]))
 
 			printl("", self, "C")
 
@@ -623,7 +626,11 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		if choice is not None:
 			http = self.plexInstance.http
-			url = "%s://%s%s" % (http, self.server, choice[2])
+			if str(choice[2]).startswith("http"):
+				# cloud-hosted extras come with an absolute URL already
+				url = str(choice[2])
+			else:
+				url = "%s://%s%s" % (http, self.server, choice[2])
 			ratingKey = choice[3]
 
 			printl("url: " + str(url), self, "D")
@@ -653,12 +660,71 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			self.sessionData = stillPlaying[1]  # is list with data
 			currentIndex = int(self.sessionData[3])
 			self["listview"].setIndex(currentIndex)
+			self.refreshEntryViewState(currentIndex)
 			self.refresh()
 
 		else:
 			self.sessionData = False
+			# the player already reported the final position to the PMS, so
+			# re-read the played item and refresh its seen/unseen marker
+			self.refreshEntryViewState()
 			if not config.plugins.dreamplex.stopLiveTvOnStartup.value and self.liveTvInViews:
 				self.restoreLiveTv()
+
+		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def refreshEntryViewState(self, index=None):
+		"""
+		Re-fetch the metadata of a single list entry and patch its
+		seen/started/unseen marker in place: one request, no full section
+		reload (same modifyEntry mechanic as markWatched/markUnwatched).
+		"""
+		printl("", self, "S")
+
+		try:
+			if index is None:
+				index = self["listview"].getIndex()
+			index = int(index)
+			entry = self.listViewList[index]
+			entryData = entry[1]
+
+			if "ratingKey" not in entryData or "server" not in entryData:
+				printl("no ratingKey/server in entry, skipping marker refresh", self, "D")
+				printl("", self, "C")
+				return
+
+			plexInstance = Singleton().getPlexInstance()
+			url = "%s://%s/library/metadata/%s" % (plexInstance.http, entryData["server"], entryData["ratingKey"])
+			freshList, mediaContainer = plexInstance.getMoviesFromSection(url)
+
+			if not freshList:
+				printl("", self, "C")
+				return
+
+			freshEntry = freshList[0]
+			freshData = freshEntry[1]
+
+			# only carry over the watch state, the rest of entryData keeps
+			# whatever the original view flow put there
+			for field in ("viewCount", "viewOffset", "lastViewedAt"):
+				if field in freshData:
+					entryData[field] = freshData[field]
+				else:
+					entryData.pop(field, None)
+
+			icons = {"seen": self.seenPic, "started": self.startedPic, "unseen": self.unseenPic}
+			patched = list(entry)
+			patched[3] = icons.get(str(freshEntry[3]), self.unseenPic)
+			self.listViewList[index] = tuple(patched)
+			self["listview"].modifyEntry(index, tuple(patched))
+
+			# the pickle cache of this section is stale now
+			self.forceUpdate = True
+		except Exception as e:
+			printl("could not refresh entry view state: " + str(e), self, "W")
 
 		printl("", self, "C")
 

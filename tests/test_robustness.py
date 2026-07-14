@@ -192,6 +192,44 @@ class TestMultiVersionMedia(RobustnessTestCase):
 		self.assertEqual(plex.streams["audio"].get("codec"), "ac3")
 
 
+class TestTrailerExtras(RobustnessTestCase):
+	"""loadExtraData=True must expose playable trailers, both from the
+	Extras subtree and from the modern primaryExtraKey reference."""
+
+	def test_extras_subtree_is_listed(self):
+		self.mock.add_xml("/library/metadata/1003", helpers.fixture("metadata_trailer_extras.xml"))
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1003", self.url("/library/sections/1/all"), False, myType="Video", loadExtraData=True)
+
+		self.assertEqual(count, 1)
+		self.assertTrue(options[0][0].endswith("delta-trailer.mp4"))
+		self.assertTrue(options[0][1].startswith("clip: Delta Movie Trailer"))
+		self.assertEqual(options[0][5], "9001")
+
+	def test_primary_extra_key_fallback(self):
+		self.mock.add_xml("/library/metadata/1004", helpers.fixture("metadata_primary_extra.xml"))
+		self.mock.add_xml("/library/metadata/9002", helpers.fixture("metadata_trailer_clip.xml"))
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1004", self.url("/library/sections/1/all"), False, myType="Video", loadExtraData=True)
+
+		self.assertEqual(count, 1)
+		self.assertTrue(options[0][0].endswith("epsilon-trailer.mp4"))
+		self.assertEqual(options[0][5], "9002")
+		# the fallback resolved the extra through its own metadata
+		self.assertEqual(len(self.mock.requests_for("/library/metadata/9002")), 1)
+
+	def test_no_extras_at_all_yields_empty(self):
+		self.mock.add_xml("/library/metadata/1001", helpers.fixture("metadata_video.xml"))
+		plex = self.newPlex()
+		count, options, server = plex.getMediaOptionsToPlay(
+			"1001", self.url("/library/sections/1/all"), False, myType="Video", loadExtraData=True)
+
+		self.assertEqual(count, 0)
+		self.assertEqual(options, [])
+
+
 class TestModernContainerGuards(RobustnessTestCase):
 	def test_shows_without_title2_do_not_crash(self):
 		self.mock.add_xml("/library/sections/2/recentlyAdded",
