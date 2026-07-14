@@ -1675,7 +1675,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			printl("currentViewMode: " + str(self.currentViewMode), self, "D")
 			self.processSubViewElements(myType=self.currentViewMode)
 		else:
-			text = "You have no data in this section!"
+			text = _("No data in this section!")
 			self.session.open(MessageBox, _("\n%s") % text, MessageBox.TYPE_INFO)
 			self.leaveNow()
 
@@ -2491,6 +2491,8 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 				printl("starting download", self, "D")
 				authHeader = self.plexInstance.get_hTokenForServer(self.details["server"])
 				printl("header: " + str(authHeader), self, "D")
+				if authHeader is None:  # unknown server -> no token, but never crash
+					authHeader = {}
 				download_url = str(download_url) if PY2 else str(download_url).encode("UTF-8")
 				if not PY2 and 'X-Plex-Token' in authHeader:
 					authHeader = {b'X-Plex-Token': authHeader["X-Plex-Token"].encode("UTF-8")}
@@ -2520,6 +2522,8 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 				printl("starting download", self, "D")
 				authHeader = self.plexInstance.get_hTokenForServer(self.details["server"])
 				printl("header: " + str(authHeader), self, "D")
+				if authHeader is None:  # unknown server -> no token, but never crash
+					authHeader = {}
 				download_url = str(download_url) if PY2 else str(download_url).encode("UTF-8")
 				if not PY2 and 'X-Plex-Token' in authHeader:
 					authHeader = {b'X-Plex-Token': authHeader["X-Plex-Token"].encode("UTF-8")}

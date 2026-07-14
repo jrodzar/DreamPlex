@@ -436,7 +436,7 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 		##
 		self.cfglist.append(getConfigListEntry(_("General Settings ") + separator, config.plugins.dreamplex.about, _("-")))
 		##
-		self.cfglist.append(getConfigListEntry(_(" > State"), self.current.state, _("Toggle state to on/off to show this server in lost or not.")))
+		self.cfglist.append(getConfigListEntry(_(" > State"), self.current.state, _("Toggle state to on/off to show this server in the list or not.")))
 		self.cfglist.append(getConfigListEntry(_(" > Autostart"), self.current.autostart, _("Enter this server automatically on startup.")))
 		self.cfglist.append(getConfigListEntry(_(" > Name"), self.current.name, _("Simply a name for better overview")))
 		self.cfglist.append(getConfigListEntry(_(" > Trailer"), self.current.loadExtraData, _("Enable trailer function. Only works with PlexPass or YYTrailer plugin.")))
@@ -453,6 +453,8 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 			else:
 				self.cfglist.append(getConfigListEntry(_(" >> DNS"), self.current.dns, _(" ")))
 				self.cfglist.append(getConfigListEntry(_(" >> Port"), self.current.port, _(" ")))
+			if getattr(self.current, "accessToken", None) is not None:
+				self.cfglist.append(getConfigListEntry(_(" > Access Token (optional)"), self.current.accessToken, _("X-Plex-Token used to authenticate against this server. Overrides local authentication and plex.tv tokens.")))
 			if self.current.localAuth.value:
 				self.addMyPlexSettings()
 
@@ -478,7 +480,7 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 
 		elif self.current.playbackType.value == "2":
 			self.useMappings = True
-			self.cfglist.append(getConfigListEntry(_("> Search and use forced subtitles"), self.current.useForcedSubtitles, _("Monitor playback to activate subtitles automatically if needed. You have to enable subtitles with 'Text'-Buttion first.")))
+			self.cfglist.append(getConfigListEntry(_("> Search and use forced subtitles"), self.current.useForcedSubtitles, _("Monitor playback to activate subtitles automatically if needed. You have to enable subtitles with the 'Text' button first.")))
 
 		elif self.current.playbackType.value == "3":
 			self.useMappings = False
