@@ -422,7 +422,9 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 				self.session.openWithCallback(self.setSelectedMedia, ChoiceBox, title=_("Select media to play"), list=functionList)
 
 			else:
-				self.setSelectedMedia()
+				# only one version: play it directly with an explicit choice,
+				# so a None choice can only mean "dialog cancelled"
+				self.setSelectedMedia((None, 0))
 
 			printl("", self, "C")
 
@@ -434,8 +436,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		result = 0
 		printl("choice: " + str(choice), self, "D")
 
-		if choice is not None:
-			result = int(choice[1])
+		if choice is None:
+			# the version dialog was cancelled (EXIT) -> go back, do not play
+			printl("selection cancelled, leaving player", self, "I")
+			self.close((False, ))
+			printl("", self, "C")
+			return
+
+		result = int(choice[1])
 
 		printl("result: " + str(result), self, "D")
 
