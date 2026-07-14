@@ -2799,14 +2799,15 @@ class PlexLibrary(Screen):
 
 		# talking to plex.tv over HTTPS can fail or be flaky: plex.tv is a
 		# round-robin of AWS IPs and some may be unreachable from a given
-		# network, so a single attempt can hit a dead IP. Retry a couple of
-		# times (fresh DNS each time) and never let a failure crash the
-		# plugin - report it instead.
+		# network. A short per-attempt timeout keeps the UI responsive when
+		# plex.tv is down (HTTPSConnection already tries every resolved IP
+		# within one attempt, so a single retry is enough for a transient
+		# hiccup); never let a failure crash the plugin - report it instead.
 		response = None
 		lastException = None
-		for attempt in range(3):
+		for attempt in range(2):
 			try:
-				conn = HTTPSConnection(PLEXTV_SERVER, timeout=15, port=443, context=ssl._create_unverified_context())
+				conn = HTTPSConnection(PLEXTV_SERVER, timeout=8, port=443, context=ssl._create_unverified_context())
 				conn.request(url=url, method=requestType, headers=myplex_header)
 				data = conn.getresponse()
 				response = data.read()
