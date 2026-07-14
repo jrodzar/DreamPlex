@@ -2432,7 +2432,8 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		self.forceUpdate = True
 
 		if not self.isFolder:
-			Singleton().getPlexInstance().doRequest(self.refreshUrl)
+			# the server rescans asynchronously anyway, we do not wait for it
+			fireAndForget(lambda url=self.refreshUrl: Singleton().getPlexInstance().doRequest(url))
 			self.getViewListData()
 
 		printl("", self, "C")
@@ -2454,8 +2455,13 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		printl("", self, "S")
 
 		if confirm:
-			Singleton().getPlexInstance().doRequest(self.deleteUrl)
-			self.getViewListData()
+			# the list may only be reloaded once the delete went through
+			def onDeleted(result, error):
+				if error is not None:
+					printl("delete failed: " + str(error), self, "E")
+				self.getViewListData()
+
+			runInThread(lambda url=self.deleteUrl: Singleton().getPlexInstance().doRequest(url), onDeleted)
 		else:
 			self.session.open(MessageBox, _("Deleting aborted!"), MessageBox.TYPE_INFO)
 
