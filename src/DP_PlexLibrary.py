@@ -938,8 +938,7 @@ class PlexLibrary(Screen):
 
 				if self.g_flattenShow:
 					url = self.http + '://' + server + entryData["key"]
-					self.getEpisodesOfSeason(url)
-					return
+					return self.getEpisodesOfSeason(url)
 
 				entryData["currentViewMode"] = "ShowSeasons"
 				entryData["nextViewMode"] = "ShowEpisodes"
@@ -2048,7 +2047,7 @@ class PlexLibrary(Screen):
 					language = stream.get('language', 'unbekannt')
 					languageCode = stream.get('languageCode', 'Unknown')
 					index = stream.get('index', None)
-					default = stream.get('index', None)
+					default = stream.get('default', False)
 
 					forced = stream.get('forced', False)
 					if forced == "1":
@@ -3205,12 +3204,16 @@ class PlexLibrary(Screen):
 
 		printl("xml: " + str(xml), self, "D")
 
-		tree = etree.fromstring(xml)
-		self.g_serverVersion = str(tree.get("version").split('-')[0])
-		if str(tree.get("multiuser")) == "1":
-			self.g_multiUser = True
-		else:
+		try:
+			tree = etree.fromstring(xml)
+			self.g_serverVersion = str(tree.get("version").split('-')[0])
+			self.g_multiUser = str(tree.get("multiuser")) == "1"
+		except Exception as e:
+			# an unreachable server root must not crash playback
+			printl("could not read server details: " + str(e), self, "W")
 			self.g_multiUser = False
+			if not self.g_serverVersion:
+				self.g_serverVersion = "unknown"
 
 		printl("self.g_serverVersion: " + str(self.g_serverVersion), self, "D")
 		printl("self.g_multiUser: " + str(self.g_multiUser), self, "D")
@@ -3426,6 +3429,11 @@ class PlexLibrary(Screen):
 	#===========================================================================
 	def getViewStateForShowEntry(self, entryData):
 		printl("", self, "S")
+
+		# modern PMS omits the counters on some answers
+		if "viewedLeafCount" not in entryData or "leafCount" not in entryData:
+			printl("", self, "C")
+			return "unseen"
 
 		# lets add this for another filter
 		if int(entryData["viewedLeafCount"]) == int(entryData["leafCount"]):

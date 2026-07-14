@@ -271,6 +271,8 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 		if self.isHomeUser:
 			if choice[1] != "":
 				printl(choice[1], self, "D")
+				# compare against the pin of the CHOSEN user, not the last listed one
+				self.currentPin = choice[1]
 				self.session.openWithCallback(self.askForPin, InputBox, title=_("Please enter the pincode!"), type=Input.PIN)
 			else:
 				self.switchUser()
