@@ -1574,10 +1574,19 @@ class PlexLibrary(Screen):
 		myplex_header['Authorization'] = "Basic %s" % base64string
 		myplex_header['X-Plex-Username'] = self.g_myplex_username
 
-		conn = HTTPSConnection(PLEXTV_SERVER, timeout=20, port=443, context=ssl._create_unverified_context())
-		conn.request(url="/users/sign_in.xml", method="POST", headers=myplex_header)
-		data = conn.getresponse()
-		response = data.read()
+		# same as getXmlTreeFromPlex: a plex.tv HTTPS failure (network or an
+		# old box's OpenSSL) must not crash the login, just report no token
+		try:
+			conn = HTTPSConnection(PLEXTV_SERVER, timeout=20, port=443, context=ssl._create_unverified_context())
+			conn.request(url="/users/sign_in.xml", method="POST", headers=myplex_header)
+			data = conn.getresponse()
+			response = data.read()
+		except (ssl.SSLError, socket.error) as e:
+			self.lastError = _("Could not reach plex.tv:\n%s") % str(e)
+			printl("plex.tv sign_in failed: " + str(e), self, "W")
+			printl("", self, "C")
+			return False
+
 		if not PY2:
 			response = response.decode("UTF-8")
 
@@ -2788,10 +2797,25 @@ class PlexLibrary(Screen):
 		myplex_header = getPlexHeader(self.g_sessionID)
 		myplex_header['X-Plex-Token'] = str(self.serverConfig_myplexToken)
 
-		conn = HTTPSConnection(PLEXTV_SERVER, timeout=30, port=443, context=ssl._create_unverified_context())
-		conn.request(url=url, method=requestType, headers=myplex_header)
-		data = conn.getresponse()
-		response = data.read()
+		# talking to plex.tv over HTTPS can fail (network down, or an old
+		# box whose OpenSSL cannot negotiate with modern plex.tv/Cloudflare);
+		# never let that crash the plugin - report it instead
+		try:
+			conn = HTTPSConnection(PLEXTV_SERVER, timeout=30, port=443, context=ssl._create_unverified_context())
+			conn.request(url=url, method=requestType, headers=myplex_header)
+			data = conn.getresponse()
+			response = data.read()
+		except (ssl.SSLError, socket.error) as e:
+			self.lastError = _("Could not reach plex.tv:\n%s\n\nTip: use an IP connection with an Access Token instead.") % str(e)
+			printl("plex.tv connection failed: " + str(e), self, "W")
+			printl("", self, "C")
+			return False
+		except Exception as e:
+			self.lastError = _("plex.tv error:\n%s") % str(e)
+			printl("plex.tv unexpected error: " + str(e), self, "W")
+			printl("", self, "C")
+			return False
+
 		if not PY2:
 			response = response.decode("UTF-8")
 		printl("response: " + response, self, "D")

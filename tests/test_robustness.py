@@ -270,6 +270,26 @@ class TestTrailerExtras(RobustnessTestCase):
 		self.assertEqual(options, [])
 
 
+class TestPlexTvUnreachable(RobustnessTestCase):
+	"""A plex.tv HTTPS failure (old box OpenSSL, network down) must not
+	crash the plugin - it should report the error and return False."""
+
+	def test_getXmlTreeFromPlex_survives_connection_failure(self):
+		plex = self.newPlex()
+		# point plex.tv at a closed port so the HTTPS connect fails fast
+		import src.DP_PlexLibrary as lib
+		original = lib.PLEXTV_SERVER
+		lib.PLEXTV_SERVER = "127.0.0.1"
+		self.addCleanup(setattr, lib, "PLEXTV_SERVER", original)
+		plex.serverConfig_myplexToken = "x"
+
+		result = plex.getXmlTreeFromPlex("/pms/system/library/sections")
+
+		self.assertFalse(result)
+		self.assertTrue(plex.lastError)
+		self.assertIn("plex.tv", plex.lastError)
+
+
 class TestModernContainerGuards(RobustnessTestCase):
 	def test_shows_without_title2_do_not_crash(self):
 		self.mock.add_xml("/library/sections/2/recentlyAdded",
