@@ -2975,6 +2975,18 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			found = True
 			self["sound"].setPixmapNum(3)
 
+		elif audio == "EAC3":
+			found = True
+			self["sound"].setPixmapNum(4)
+
+		elif audio == "AAC":
+			found = True
+			self["sound"].setPixmapNum(5)
+
+		elif audio == "OPUS":
+			found = True
+			self["sound"].setPixmapNum(6)
+
 		elif audio == "UNKNOWN" or audio == "":
 			found = False
 
@@ -3094,7 +3106,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		elif aspect == "2.35":  # 21:9
 			found = True
-			self["aspect"].setPixmapNum(1)
+			self["aspect"].setPixmapNum(2)
 
 		elif aspect == "UNKNOWN" or aspect == "":
 			found = False
@@ -3134,6 +3146,18 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		elif codec == "MPEG2VIDEO":
 			found = True
 			self["codec"].setPixmapNum(3)
+
+		elif codec == "HEVC" or codec == "H265":
+			found = True
+			self["codec"].setPixmapNum(4)
+
+		elif codec == "AV1":
+			found = True
+			self["codec"].setPixmapNum(5)
+
+		elif codec == "VP9":
+			found = True
+			self["codec"].setPixmapNum(6)
 
 		elif codec == "UNKNOWN" or codec == "":
 			found = False
