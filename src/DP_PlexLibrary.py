@@ -448,6 +448,10 @@ class PlexLibrary(Screen):
 					#entryData["serverName"] = self.serverConfig_Name.encode()
 					entryData["contentUrl"] = self.getContentUrl(entryData['address'], entryData['path'])  # former t_url
 
+					# marker for getSectionFilter: modern PMS answer /library/sections/<id>
+					# without Directory children, so the filter menu must be synthesized
+					entryData["isSectionRoot"] = True
+
 					# if this is a plex.tv connection we look if we should provide more information for better overview since plex.tv combines all servers and shares
 					detail = ""
 					if config.plugins.dreamplex.showDetailsInList.value and self.serverConfig_connectionType == "2":
@@ -555,62 +559,175 @@ class PlexLibrary(Screen):
 		# get xml from url
 		tree = self.getXmlTreeFromUrl(incomingEntryData["contentUrl"])
 
-		if not tree:
-			return [], {}
-		else:
-			# find coressponding tags in xml
+		# no Element truthiness here: a childless container must reach the
+		# synthesizer below, and Element.__bool__ is deprecated anyway
+		if tree is not None:
 			entries = tree.findall('Directory')
-			counter = 0
+		else:
+			entries = []
+		counter = 0
 
-			for entry in entries:
-				counter += 1
-				entryData = (dict(entry.items()))
+		for entry in entries:
+			counter += 1
+			entryData = (dict(entry.items()))
 
-				entryData["hasSecondaryTag"] = entryData.get("secondary", False)
-				entryData["hasPromptTag"] = entryData.get("prompt", False)
-				entryData["type"] = incomingEntryData["type"]
+			entryData["hasSecondaryTag"] = entryData.get("secondary", False)
+			entryData["hasPromptTag"] = entryData.get("prompt", False)
+			entryData["type"] = incomingEntryData["type"]
 
-				title = entryData.get('title')
-				title = title.encode('utf-8') if PY2 else title
+			title = entryData.get('title')
+			title = title.encode('utf-8') if PY2 else title
 
-				if entryData["hasSecondaryTag"]:  # means that the next answer is a filter
-					entryData["contentUrl"] = incomingEntryData["contentUrl"] + "/" + entryData["key"]
+			# modern PMS ships the ready-to-use content path of a filter value
+			# (e.g. /library/sections/1/all?genre=123) in the fastKey attribute;
+			# the legacy contentUrl + "/" + key drill-in no longer exists there
+			fastKey = entryData.get("fastKey")
+			if fastKey:
+				server = self.getServerFromURL(incomingEntryData["contentUrl"])
+				entryData["contentUrl"] = "%s://%s%s" % (self.http, server, fastKey)
+			else:
+				entryData["contentUrl"] = incomingEntryData["contentUrl"] + "/" + entryData["key"]
 
-					fullList.append((_(title), Plugin.MENU_FILTER, "showFilter", entryData))
+			if entryData["hasSecondaryTag"]:  # means that the next answer is a filter
+				fullList.append((_(title), Plugin.MENU_FILTER, "showFilter", entryData))
+
+			else:
+				if config.plugins.dreamplex.useCache.value:
+					# we set this here now to have this information later
+					if self.currentUuid in self.g_sectionCache:
+						entryData["source"] = self.g_sectionCache[self.currentUuid]["source"]
+					else:
+						entryData["source"] = "plex"
+
+					entryData["uuid"] = self.currentUuid
+					entryData["type"] = self.type
+
+				if incomingEntryData["type"] == 'show' or incomingEntryData["type"] == 'episode':
+					fullList.append((_(title), getPlugin("tvshows", Plugin.MENU_TVSHOWS), "showEntry", entryData))
+
+				elif incomingEntryData["type"] == 'movie':
+					fullList.append((_(title), getPlugin("movies", Plugin.MENU_MOVIES), "movieEntry", entryData))
+
+				elif incomingEntryData["type"] == 'artist':
+					fullList.append((_(title), getPlugin("music", Plugin.MENU_MUSIC), "musicEntry", entryData))
+
+				# elif incomingEntryData["type"] == 'photo':
+				# 	printl( "_MODE_PHOTOS detected", self, "D")
 
 				else:
-					entryData["contentUrl"] = incomingEntryData["contentUrl"] + "/" + entryData["key"]
+					raise Exception("we should not be here")
 
-					if config.plugins.dreamplex.useCache.value:
-						# we set this here now to have this information later
-						if self.currentUuid in self.g_sectionCache:
-							entryData["source"] = self.g_sectionCache[self.currentUuid]["source"]
-						else:
-							entryData["source"] = "plex"
+			printl("entryData: " + str(entryData), self, "D")
 
-						entryData["uuid"] = self.currentUuid
-						entryData["type"] = self.type
-
-					if incomingEntryData["type"] == 'show' or incomingEntryData["type"] == 'episode':
-						fullList.append((_(title), getPlugin("tvshows", Plugin.MENU_TVSHOWS), "showEntry", entryData))
-
-					elif incomingEntryData["type"] == 'movie':
-						fullList.append((_(title), getPlugin("movies", Plugin.MENU_MOVIES), "movieEntry", entryData))
-
-					elif incomingEntryData["type"] == 'artist':
-						fullList.append((_(title), getPlugin("music", Plugin.MENU_MUSIC), "musicEntry", entryData))
-
-					# elif incomingEntryData["type"] == 'photo':
-					# 	printl( "_MODE_PHOTOS detected", self, "D")
-
-					else:
-						raise Exception("we should not be here")
-
-				printl("entryData: " + str(entryData), self, "D")
-
-		# as a last step we check if there where any content
+		# modern PMS answers the section root without Directory children:
+		# build the menu locally instead of failing with "No data"
 		if counter == 0:
-			self.lastError = _("No data in this section!")
+			if incomingEntryData.get("isSectionRoot", False) and tree is not None and tree.tag == "MediaContainer":
+				printl("no filter children from PMS, synthesizing section menu", self, "I")
+				fullList = self.getSynthesizedSectionFilter(incomingEntryData)
+
+			if not fullList:
+				self.lastError = _("No data in this section!")
+
+		printl("", self, "C")
+		return fullList
+
+	#=============================================================================
+	#
+	#=============================================================================
+	def getSynthesizedSectionFilter(self, incomingEntryData):
+		"""
+		Modern Plex Media Servers no longer answer /library/sections/<id>
+		with the legacy secondary navigation (All/Unwatched/By Genre/...).
+		Build that menu locally with the same tuple shapes getSectionFilter()
+		produces, so DP_ServerMenu/DP_LibMain need no changes at all.
+		"""
+		printl("", self, "S")
+
+		sectionType = incomingEntryData.get("type")
+		rootUrl = incomingEntryData["contentUrl"]
+
+		# (title, key, kind, extraData)
+		# kind: None = content entry, "secondary" = next level is a filter
+		# list, "prompt" = ask for a search string first
+		if sectionType == 'movie':
+			plugin = getPlugin("movies", Plugin.MENU_MOVIES)
+			entryType = "movieEntry"
+			menu = [
+				(_("All Movies"), "all", None, None),
+				(_("Unwatched"), "all?unwatched=1", None, None),
+				(_("Recently Added"), "recentlyAdded", None, None),
+				(_("Recently Released"), "newest", None, None),
+				(_("On Deck"), "onDeck", None, None),
+				(_("By Genre"), "genre", "secondary", None),
+				(_("By Year"), "year", "secondary", None),
+				(_("By Decade"), "decade", "secondary", None),
+				(_("Search..."), "search?type=1", "prompt", None),
+			]
+
+		elif sectionType == 'show' or sectionType == 'episode':
+			plugin = getPlugin("tvshows", Plugin.MENU_TVSHOWS)
+			entryType = "showEntry"
+			# recentlyAdded/onDeck answer episodes and seasons mixed together;
+			# DP_LibShows switches to the direct Video+Directory parser for
+			# exactly these key values
+			menu = [
+				(_("All Shows"), "all", None, None),
+				(_("Unwatched"), "all?unwatched=1", None, None),
+				(_("Recently Added"), "recentlyAdded", None, None),
+				(_("On Deck"), "onDeck", None, None),
+				(_("By Genre"), "genre", "secondary", None),
+				(_("By Year"), "year", "secondary", None),
+				(_("Search..."), "search?type=2", "prompt", None),
+			]
+
+		elif sectionType == 'artist':
+			plugin = getPlugin("music", Plugin.MENU_MUSIC)
+			entryType = "musicEntry"
+			# recently added music answers albums, route it to the album parser
+			menu = [
+				(_("All Artists"), "all", None, None),
+				(_("Recently Added"), "recentlyAdded", None,
+					{"nextViewMode": "ShowAlbums", "currentViewMode": "ShowAlbums"}),
+				(_("By Genre"), "genre", "secondary", None),
+				(_("Search..."), "search?type=8", "prompt", None),
+			]
+
+		else:
+			printl("unsupported section type: " + str(sectionType), self, "W")
+			printl("", self, "C")
+			return []
+
+		fullList = []
+		for title, key, kind, extraData in menu:
+			entryData = {
+				"title": title,
+				"key": key,
+				"type": sectionType,
+				"contentUrl": rootUrl + "/" + key,
+				"hasSecondaryTag": kind == "secondary",
+				"hasPromptTag": kind == "prompt",
+				"synthesized": True,
+			}
+
+			if extraData:
+				entryData.update(extraData)
+
+			if kind == "secondary":
+				fullList.append((title, Plugin.MENU_FILTER, "showFilter", entryData))
+			else:
+				if config.plugins.dreamplex.useCache.value:
+					currentUuid = getattr(self, "currentUuid", None)
+					if currentUuid in self.g_sectionCache:
+						entryData["source"] = self.g_sectionCache[currentUuid]["source"]
+					else:
+						entryData["source"] = "plex"
+
+					entryData["uuid"] = currentUuid
+
+				fullList.append((title, plugin, entryType, entryData))
+
+			printl("synthesized entryData: " + str(entryData), self, "D")
 
 		printl("", self, "C")
 		return fullList
