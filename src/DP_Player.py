@@ -439,6 +439,11 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 		printl("result: " + str(result), self, "D")
 
+		# remember which VERSION was picked so the transcoder serves it too
+		selectedOption = self.options[result]
+		if len(selectedOption) > 7 and selectedOption[7] is not None:
+			Singleton().getPlexInstance().setSelectedVersion(selectedOption[7])
+
 		Singleton().getPlexInstance().setPlaybackType(str(self.playbackMode))
 
 		mediaFileUrl = Singleton().getPlexInstance().mediaType({'key': self.options[result][0], 'file': self.options[result][1]}, self.server)

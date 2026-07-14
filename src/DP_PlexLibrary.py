@@ -177,6 +177,10 @@ class PlexLibrary(Screen):
 		# per-address cache of section uuid -> numeric section id
 		self.g_sectionKeyMaps = {}
 
+		# version (mediaIndex) chosen in the playback dialog, consumed by
+		# transcode() so the universal transcoder serves the right file
+		self.g_selectedMediaIndex = None
+
 		# global serverConfig
 		self.g_serverConfig = serverConfig
 
@@ -2414,10 +2418,12 @@ class PlexLibrary(Screen):
 
 					try:
 						# indexes 0-4 are consumed by DP_Player/mediaType;
-						# 5-6 label the version in the selection dialog
+						# 5-6 label the version in the selection dialog and
+						# 7 is the mediaIndex for the universal transcoder
 						bits = (part.get('key'), part.get('file'), part.get('container'),
 							part.get('size'), part.get('duration'),
-							media.get('videoResolution'), media.get('videoCodec'))
+							media.get('videoResolution'), media.get('videoCodec'),
+							mediaIndex)
 						parts.append(bits)
 						partsCount += 1
 					except Exception as e:
@@ -2529,8 +2535,16 @@ class PlexLibrary(Screen):
 	#
 	#========================================================================
 
+	def setSelectedVersion(self, mediaIndex):
+		printl("selected version mediaIndex: " + str(mediaIndex), self, "D")
+		self.g_selectedMediaIndex = mediaIndex
+
+	#========================================================================
+	#
+	#========================================================================
 	def getMediaOptionsToPlay(self, myId, vids, override=False, myType="Video", loadExtraData=False):
 		printl("", self, "S")
+		self.g_selectedMediaIndex = None  # a new item starts unselected
 
 		self.getTranscodeSettings(override)
 		self.server = self.getServerFromURL(vids)
@@ -3359,6 +3373,12 @@ class PlexLibrary(Screen):
 			transcode.append("subtitleSize=100")
 			transcode.append("audioBoost=100")
 			transcode.append("waitForSegments=1")
+
+			# without mediaIndex the PMS transcodes the FIRST version of the
+			# item no matter which one was chosen in the dialog
+			if self.g_selectedMediaIndex is not None:
+				transcode.append("mediaIndex=%s" % self.g_selectedMediaIndex)
+				transcode.append("partIndex=0")
 		else:
 			printl("Setting up HTTP Stream", self, "I")
 			streamPath = "video/:/transcode/segmented"
