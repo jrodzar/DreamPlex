@@ -216,6 +216,23 @@ def runInThread(work, onDone):
 #===============================================================================
 
 
+def fireAndForget(work):
+	"""
+	Run a blocking call in a worker thread and ignore its result. Used for
+	reports we do not need an answer from (progress/scrobble, transcoder
+	keep-alive) - they must never stall the GUI.
+	"""
+	def onDone(result, error):
+		if error is not None:
+			printl2("background request failed: " + str(error), "__common__::fireAndForget", "W")
+
+	runInThread(work, onDone)
+
+#===============================================================================
+#
+#===============================================================================
+
+
 def getVersion():
 	return str(version)
 
