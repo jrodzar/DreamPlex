@@ -345,6 +345,36 @@ class TestMediaChoiceName(unittest.TestCase):
 			self.assertEqual(name, expected)
 
 
+class TestRatingValue(unittest.TestCase):
+	"""The rating stars must reflect the score modern Plex actually sends:
+	current PMS reports "audienceRating" and only rarely a critic "rating"."""
+
+	def test_audience_rating_used_when_no_critic_rating(self):
+		from src.__common__ import getRatingValue
+		self.assertEqual(getRatingValue({"audienceRating": "5.5"}), 5.5)
+
+	def test_critic_rating_is_preferred(self):
+		from src.__common__ import getRatingValue
+		self.assertEqual(getRatingValue({"rating": "7.8", "audienceRating": "5.5"}), 7.8)
+
+	def test_falls_back_past_zero_critic_rating(self):
+		from src.__common__ import getRatingValue
+		# a "0.0" critic score must not win over a real audience score
+		self.assertEqual(getRatingValue({"rating": "0.0", "audienceRating": "6.4"}), 6.4)
+
+	def test_user_rating_is_last_resort(self):
+		from src.__common__ import getRatingValue
+		self.assertEqual(getRatingValue({"userRating": "9"}), 9.0)
+
+	def test_no_score_returns_zero(self):
+		from src.__common__ import getRatingValue
+		self.assertEqual(getRatingValue({"title": "x"}), 0.0)
+
+	def test_garbage_value_is_skipped(self):
+		from src.__common__ import getRatingValue
+		self.assertEqual(getRatingValue({"rating": "N/A", "audienceRating": "7.2"}), 7.2)
+
+
 class TestPlexTvUnreachable(RobustnessTestCase):
 	"""A plex.tv HTTPS failure (old box OpenSSL, network down) must not
 	crash the plugin - it should report the error and return False."""

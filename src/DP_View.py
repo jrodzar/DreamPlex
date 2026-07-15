@@ -65,7 +65,7 @@ from .DPH_Singleton import Singleton
 from .DPH_ScreenHelper import DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Screen, DPH_Filter
 from .DP_ViewFactory import getNoneDirectoryElements, getDefaultDirectoryElementsList, getGuiElements
 
-from .__common__ import printl2 as printl, loadPicture, durationToTime, getLiveTv, encodeThat, checkXmlFile, getXmlContent, getSkinResolution, runInThread, fireAndForget
+from .__common__ import printl2 as printl, loadPicture, durationToTime, getLiveTv, encodeThat, checkXmlFile, getXmlContent, getSkinResolution, runInThread, fireAndForget, getRatingValue
 from .__plugin__ import Plugin
 from .__init__ import _, defaultSkinsFolderPath  # _ is translation
 
@@ -3280,13 +3280,10 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 	def handlePopularityPixmaps(self):
 		printl("", self, "S")
 
-		try:
-			popularity = float(self.details["rating"])
-		except Exception as e:
-			popularity = 0
-			printl("error in popularity " + str(e), self, "D")
-
-		self["rating_stars"].setValue(int(popularity) * 10)
+		# rating is 0-10; the ProgressBar range is 0-100. Multiply before the
+		# int() so e.g. 5.5 shows 2.75 stars instead of being truncated to 5.0.
+		popularity = getRatingValue(self.details)
+		self["rating_stars"].setValue(int(popularity * 10))
 		self["rating_stars"].show()
 
 		printl("", self, "C")

@@ -67,7 +67,7 @@ except ImportError:
 #===============================================================================
 # CONSTANTS
 #===============================================================================
-version = "2.3.5"
+version = "2.3.6"
 boxResoltion = None
 skinAuthors = ""
 skinResolution = "HD"
@@ -963,6 +963,28 @@ def buildMediaChoiceName(items):
 
 	printl2("", "__common__::buildMediaChoiceName", "C")
 	return encodeThat(name)
+
+#===========================================================================
+#
+#===========================================================================
+
+
+def getRatingValue(details):
+	"""Return a 0-10 popularity score for a Plex item.
+
+	Modern Plex Media Server reports the community score as "audienceRating";
+	the legacy "rating" is only present when there is a separate critic score.
+	Prefer the critic rating, then the audience rating, then the user's own
+	rating, so the star widget is not left empty for items that do have a score.
+	"""
+	for key in ("rating", "audienceRating", "userRating"):
+		try:
+			value = float(details.get(key, 0) or 0)
+		except (ValueError, TypeError):
+			value = 0.0
+		if value:
+			return value
+	return 0.0
 
 #===========================================================================
 #
