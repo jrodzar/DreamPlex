@@ -642,6 +642,23 @@ class PlexLibrary(Screen):
 			title = entryData.get('title')
 			title = title.encode('utf-8') if PY2 else title
 
+			# the server names the "all" filter after the section on movie
+			# libraries (e.g. "All Pel·lis"), so it never matches a catalogue
+			# entry and shows untranslated; on show/artist libraries it is the
+			# generic "All Shows"/"All Artists" which the catalogue does cover.
+			# Use the same translatable label the synthesized menu uses, so
+			# "Todos" is consistent regardless of section name or server.
+			if entryData.get("key") == "all":
+				sectionType = incomingEntryData.get("type")
+				if sectionType in ("show", "episode"):
+					label = _("All Shows")
+				elif sectionType == "artist":
+					label = _("All Artists")
+				else:
+					label = _("All Movies")
+			else:
+				label = _(title)
+
 			# modern PMS ships the ready-to-use content path of a filter value
 			# (e.g. /library/sections/1/all?genre=123) in the fastKey attribute;
 			# the legacy contentUrl + "/" + key drill-in no longer exists there
@@ -653,7 +670,7 @@ class PlexLibrary(Screen):
 				entryData["contentUrl"] = incomingEntryData["contentUrl"] + "/" + entryData["key"]
 
 			if entryData["hasSecondaryTag"]:  # means that the next answer is a filter
-				fullList.append((_(title), Plugin.MENU_FILTER, "showFilter", entryData))
+				fullList.append((label, Plugin.MENU_FILTER, "showFilter", entryData))
 
 			else:
 				if config.plugins.dreamplex.useCache.value:
@@ -667,13 +684,13 @@ class PlexLibrary(Screen):
 					entryData["type"] = self.type
 
 				if incomingEntryData["type"] == 'show' or incomingEntryData["type"] == 'episode':
-					fullList.append((_(title), getPlugin("tvshows", Plugin.MENU_TVSHOWS), "showEntry", entryData))
+					fullList.append((label, getPlugin("tvshows", Plugin.MENU_TVSHOWS), "showEntry", entryData))
 
 				elif incomingEntryData["type"] == 'movie':
-					fullList.append((_(title), getPlugin("movies", Plugin.MENU_MOVIES), "movieEntry", entryData))
+					fullList.append((label, getPlugin("movies", Plugin.MENU_MOVIES), "movieEntry", entryData))
 
 				elif incomingEntryData["type"] == 'artist':
-					fullList.append((_(title), getPlugin("music", Plugin.MENU_MUSIC), "musicEntry", entryData))
+					fullList.append((label, getPlugin("music", Plugin.MENU_MUSIC), "musicEntry", entryData))
 
 				# elif incomingEntryData["type"] == 'photo':
 				# 	printl( "_MODE_PHOTOS detected", self, "D")

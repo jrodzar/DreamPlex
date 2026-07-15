@@ -221,6 +221,21 @@ class TestNoSynthesisCases(SectionFilterTestCase):
 		for entry in menu:
 			self.assertNotIn("synthesized", entry[3])
 
+	def test_all_filter_gets_the_translatable_label(self):
+		# the server names the "all" filter after the section on movie
+		# libraries ("All Pel·lis"), which never matches the catalogue; it must
+		# be shown as the translatable "All Movies" instead of the raw title
+		self.mock.add_xml("/library/sections/1", helpers.fixture("section_root_named_all.xml"))
+		plex = self.newPlex()
+		entryData = self.sectionEntryData(plex, "Movies")
+
+		menu = plex.getSectionFilter(entryData)
+		allEntry = next(e for e in menu if e[3].get("key") == "all")
+		self.assertEqual(allEntry[0], "All Movies")
+		self.assertNotIn("Pel", allEntry[0])
+		# the other server-provided filters keep their own titles
+		self.assertTrue(self.findEntry(menu, "Unwatched"))
+
 	def test_empty_answer_without_root_marker_sets_error(self):
 		self.mock.add_xml("/library/sections/1", helpers.fixture("section_root_modern.xml"))
 		plex = self.newPlex()
