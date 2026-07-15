@@ -29,6 +29,7 @@ import os
 import datetime
 import shutil
 import math
+import time
 import uuid
 import glob
 import threading
@@ -920,6 +921,48 @@ def convertSize(size):
 
 	printl2("", "__common__::convertSize", "C")
 	return '%s %s' % (s, size_name[i])
+
+#===========================================================================
+#
+#===========================================================================
+
+
+def buildMediaChoiceName(items):
+	"""Display label for one entry of the "Select media to play" dialog.
+
+	items is one entry of the parts list from getMediaOptionsToPlay():
+	(key, file, container, size, duration[, videoResolution, videoCodec, mediaIndex])
+
+	Always returns a native str: on Python 2 the enigma2 listbox renders a
+	unicode label (any non-ascii file name) as "<not a string>".
+	"""
+	printl2("", "__common__::buildMediaChoiceName", "S")
+
+	if items[1] is not None:
+		name = items[1].split('/')[-1]
+	else:
+		size = convertSize(int(items[3]))
+		duration = time.strftime('%H:%M:%S', time.gmtime(int(items[4])))
+		# this is the case when there is no information of the real file name
+		name = items[0] + " (" + items[2] + " / " + size + " / " + duration + ")"
+
+	# prefix the VERSION properties (resolution/codec/size) so
+	# multi-version items are distinguishable
+	versionBits = []
+	if len(items) > 5 and items[5]:
+		versionBits.append("%s" % (items[5],))
+	if len(items) > 6 and items[6]:
+		versionBits.append("%s" % (items[6],))
+	if versionBits:
+		try:
+			if items[3]:
+				versionBits.append(convertSize(int(items[3])))
+		except Exception:
+			pass
+		name = "[" + " / ".join(versionBits) + "]  " + name
+
+	printl2("", "__common__::buildMediaChoiceName", "C")
+	return encodeThat(name)
 
 #===========================================================================
 #
