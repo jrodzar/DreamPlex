@@ -285,10 +285,12 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		self["rated"] = MultiPixmap()
 
-		# rotating busy spinner, shown while the library loads in the
-		# background (see startBusy/stopBusy in DPH_ScreenHelper)
+		# rotating busy spinner + caption, shown while the library loads in
+		# the background (see startBusy/stopBusy in DPH_ScreenHelper)
 		self["busy"] = MultiPixmap()
 		self["busy"].hide()
+		self["busyText"] = Label()
+		self["busyText"].hide()
 
 		self["title"] = Label()
 		self["grandparentTitle"] = Label()
@@ -1704,15 +1706,20 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		forceUpdate = self.forceUpdate
 		self.forceUpdate = False
 
-		# tell the user we are working. The spinner is the indicator in the
-		# skins that ship it; only fall back to a text hint on the counter
-		# when there is no spinner (external skins), so the two never overlap
-		self.startBusy()
+		# tell the user we are working. With a spinner (skins that ship it)
+		# the caption goes under the spinner; without one, fall back to a hint
+		# on the item counter so external skins still say something
 		if self.getBusyWidget() is None:
 			try:
 				self["total"].setText(_("Loading..."))
 			except Exception:
 				pass
+		else:
+			try:
+				self["busyText"].setText(_("Loading..."))
+			except Exception:
+				pass
+		self.startBusy()
 
 		runInThread(lambda: self.loadLibrary(entryData, forceUpdate), self.onLibraryLoaded)
 

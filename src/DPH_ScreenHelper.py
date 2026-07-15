@@ -163,6 +163,19 @@ class DPH_ScreenHelper(object):
 		except Exception:
 			return None
 
+	def getBusyTextWidget(self):
+		# optional caption under the spinner; the screen sets its text, the
+		# helper only shows/hides it alongside the spinner
+		try:
+			if "busyText" not in self:
+				return None
+			widget = self["busyText"]
+			if getattr(widget, "instance", "n/a") is None:
+				return None
+			return widget
+		except Exception:
+			return None
+
 	def startBusy(self):
 		printl("", self, "S")
 
@@ -183,6 +196,13 @@ class DPH_ScreenHelper(object):
 			widget.show()
 		except Exception as e:
 			printl("could not show busy widget: " + str(e), self, "W")
+
+		caption = self.getBusyTextWidget()
+		if caption is not None:
+			try:
+				caption.show()
+			except Exception:
+				pass
 
 		self._busyTimer.start(self.BUSY_INTERVAL_MS)
 
@@ -213,6 +233,13 @@ class DPH_ScreenHelper(object):
 		if widget is not None:
 			try:
 				widget.hide()
+			except Exception:
+				pass
+
+		caption = self.getBusyTextWidget()
+		if caption is not None:
+			try:
+				caption.hide()
 			except Exception:
 				pass
 

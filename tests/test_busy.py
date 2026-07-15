@@ -113,6 +113,26 @@ class TestBusySpinner(unittest.TestCase):
 		host = _Host({"busy": _FakePixmap()})
 		host.stopBusy()  # no timer created yet
 
+	def test_caption_is_shown_and_hidden_with_the_spinner(self):
+		w = _FakePixmap()
+		caption = _FakePixmap()
+		host = _Host({"busy": w, "busyText": caption})
+
+		host.startBusy()
+		self.assertTrue(caption.shown)
+
+		host.stopBusy()
+		self.assertTrue(caption.hidden)
+
+	def test_missing_caption_is_fine(self):
+		# spinner but no busyText widget (e.g. an older skin revision)
+		w = _FakePixmap()
+		host = _Host({"busy": w})
+
+		host.startBusy()   # must not raise
+		host.stopBusy()
+		self.assertIsNone(host.getBusyTextWidget())
+
 
 if __name__ == "__main__":
 	unittest.main()

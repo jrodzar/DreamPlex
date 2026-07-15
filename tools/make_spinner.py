@@ -9,9 +9,10 @@ Run on the dev machine (needs Pillow); the PNGs are committed to the repo.
 
     py -3 tools/make_spinner.py
 
-Twelve frames, each the previous rotated by 360/12 degrees, drawn 4x and
-downsampled for clean edges. One accent colour (the skin's amber #f0a30a);
-sizes match the skin.xml widgets (72 px HD, 108 px FHD).
+Twelve frames sweeping a "comet" arc: the colour fades from opaque at the
+head to transparent at the tail, so there are no round end-caps that read as
+stray dots. One accent colour (the skin's amber #f0a30a); sizes match the
+skin.xml widgets (72 px HD, 108 px FHD). Drawn 4x and downsampled.
 """
 import math
 import os
@@ -19,9 +20,10 @@ import os
 from PIL import Image, ImageDraw
 
 FRAMES = 12
-ACCENT = (240, 163, 10, 255)      # #f0a30a - the skin accent
-TRACK = (150, 150, 150, 60)       # faint full ring behind the arc
-ARC_DEG = 270                     # sweep of the moving arc
+ACCENT = (240, 163, 10)           # #f0a30a - the skin accent (rgb)
+ARC_DEG = 300                     # total sweep of the comet
+SEGMENTS = 120                    # sub-arcs used to paint the alpha gradient
+MIN_ALPHA = 25                    # tail opacity
 SUPERSAMPLE = 4
 
 # skin folder -> spinner pixel size (matches the <widget name="busy"> size)
@@ -40,24 +42,20 @@ def make_frame(size, angle_deg):
     S = size * SUPERSAMPLE
     im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    width = max(2, int(S * 0.12))
+    width = max(2, int(S * 0.11))
     m = width // 2 + 1
     box = [m, m, S - m, S - m]
-    # faint full track
-    d.arc(box, 0, 360, fill=TRACK, width=width)
-    # moving accent arc
-    start = angle_deg
-    end = angle_deg + ARC_DEG
-    d.arc(box, start, end, fill=ACCENT, width=width)
-    # round caps at both ends of the accent arc
-    r = (S - 2 * m) / 2.0
-    cx = cy = S / 2.0
-    for ang in (start, end):
-        a = math.radians(ang)
-        x = cx + r * math.cos(a)
-        y = cy + r * math.sin(a)
-        d.ellipse([x - width / 2.0, y - width / 2.0,
-                   x + width / 2.0, y + width / 2.0], fill=ACCENT)
+
+    # paint the sweep as many short sub-arcs, opacity ramping tail->head, so
+    # the colour fades out instead of ending in a round cap
+    step = ARC_DEG / float(SEGMENTS)
+    for i in range(SEGMENTS):
+        frac = i / float(SEGMENTS - 1)          # 0 at tail, 1 at head
+        alpha = int(MIN_ALPHA + frac * (255 - MIN_ALPHA))
+        a0 = angle_deg + i * step
+        # small overlap (+1.2 deg) keeps the ramp visually continuous
+        d.arc(box, a0, a0 + step + 1.2, fill=ACCENT + (alpha,), width=width)
+
     return im.resize((size, size), Image.LANCZOS)
 
 
