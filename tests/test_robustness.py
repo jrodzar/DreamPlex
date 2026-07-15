@@ -302,6 +302,49 @@ class TestRunInThread(unittest.TestCase):
 		self.assertIsInstance(seen["error"], IOError)
 
 
+class TestMediaChoiceName(unittest.TestCase):
+	"""The "Select media to play" labels must be native str: on py2 the
+	enigma2 listbox renders a unicode label as "<not a string>", which is
+	exactly what non-ascii file names produced (py2 etree hands non-ascii
+	attribute values over as unicode)."""
+
+	def test_non_ascii_file_name_yields_native_str(self):
+		from src.__common__ import buildMediaChoiceName
+		items = (u"/library/parts/1/file.mkv",
+				u"/data/Pel·lis/La película (2024)/La película 4K.mkv",
+				u"mkv", u"2600000000", u"7200", u"4k", u"hevc", 0)
+
+		name = buildMediaChoiceName(items)
+
+		self.assertIsInstance(name, str)  # native str on BOTH pythons
+		expected = u"[4k / hevc / 2.42 GB]  La película 4K.mkv"
+		if str is bytes:  # py2: utf-8 encoded bytes
+			self.assertEqual(name, expected.encode("utf-8"))
+		else:
+			self.assertEqual(name, expected)
+
+	def test_version_prefix_and_basename(self):
+		from src.__common__ import buildMediaChoiceName
+		items = ("/library/parts/2/file.mkv", "/data/movies/Movie.1080p.mkv",
+				"mkv", "1073741824", "5400", "1080", "h264", 1)
+
+		self.assertEqual(buildMediaChoiceName(items),
+				"[1080 / h264 / 1.0 GB]  Movie.1080p.mkv")
+
+	def test_no_file_name_falls_back_to_key_and_stays_str(self):
+		from src.__common__ import buildMediaChoiceName
+		items = (u"película", None, u"mkv", u"1048576", u"61")
+
+		name = buildMediaChoiceName(items)
+
+		self.assertIsInstance(name, str)
+		expected = u"película (mkv / 1.0 MB / 00:01:01)"
+		if str is bytes:
+			self.assertEqual(name, expected.encode("utf-8"))
+		else:
+			self.assertEqual(name, expected)
+
+
 class TestPlexTvUnreachable(RobustnessTestCase):
 	"""A plex.tv HTTPS failure (old box OpenSSL, network down) must not
 	crash the plugin - it should report the error and return False."""

@@ -64,7 +64,7 @@ from .DPH_Singleton import Singleton
 #from .DP_Summary import DreamplexPlayerSummary
 from .DPH_ScreenHelper import DPH_ScreenHelper
 
-from .__common__ import printl2 as printl, convertSize, encodeThat, runInThread, fireAndForget
+from .__common__ import printl2 as printl, buildMediaChoiceName, encodeThat, runInThread, fireAndForget
 from .__init__ import _  # _ is translation
 
 
@@ -414,28 +414,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 				for items in self.options:
 					printl("item: " + str(items), self, "D")
-					if items[1] is not None:
-						name = items[1].split('/')[-1]
-					else:
-						size = convertSize(int(items[3]))
-						duration = time.strftime('%H:%M:%S', time.gmtime(int(items[4])))
-						# this is the case when there is no information of the real file name
-						name = items[0] + " (" + items[2] + " / " + size + " / " + duration + ")"
-
-					# prefix the VERSION properties (resolution/codec/size) so
-					# multi-version items are distinguishable
-					versionBits = []
-					if len(items) > 5 and items[5]:
-						versionBits.append(str(items[5]))
-					if len(items) > 6 and items[6]:
-						versionBits.append(str(items[6]))
-					if versionBits:
-						try:
-							if items[3]:
-								versionBits.append(convertSize(int(items[3])))
-						except Exception:
-							pass
-						name = "[" + " / ".join(versionBits) + "]  " + name
+					name = buildMediaChoiceName(items)
 
 					printl("name " + str(name), self, "D")
 					functionList.append((name, indexCount, ))
