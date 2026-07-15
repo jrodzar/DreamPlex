@@ -41,8 +41,11 @@
 
 
 	<screen name="TemplateBaseScreen">
-		<!-- background -->
-		<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default/images/background2-fs8.png" position="0,0" zPosition="1" size="1280,720" transparent="0"/>
+		<!-- background: must stay at zPosition="-1" (behind z=0). enigma2's ScrollLabel
+		     leaves its container widget at the default z=0 (zPosition is applied to the
+		     inner labels, not the container), so an opaque full-screen background at z>=0
+		     hides ScrollLabels such as "shortDescription" (the movie plot). -->
+		<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default/images/background2-fs8.png" position="0,0" zPosition="-1" size="1280,720" transparent="0"/>
 
 		<!-- title -->
 		<widget source="Title" render="Label" transparent="1" zPosition="4" valign="center" position="28,13" size="190,30" font="OpenSans; 18" foregroundColor="TitleColor" backgroundColor="#000000" halign="left"/>
