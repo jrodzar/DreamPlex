@@ -29,7 +29,7 @@ from Components.Input import Input
 from Components.Sources.List import List
 from Components.Sources.StaticText import StaticText
 from Components.config import config
-from Components.Pixmap import Pixmap
+from Components.Pixmap import Pixmap, MultiPixmap
 from Components.Label import Label
 
 from Screens.MessageBox import MessageBox
@@ -136,8 +136,16 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 		self["btn_green"].hide()
 		self["btn_greenText"] = Label()
 
+		# rotating busy spinner, shown while sections/filters load in the
+		# background (see startBusy/stopBusy in DPH_ScreenHelper)
+		self["busy"] = MultiPixmap()
+		self["busy"].hide()
+
 		self["text_HomeUserLabel"] = Label()
 		self["text_HomeUser"] = Label()
+
+		# stop the busy spinner timer if the screen is closed mid-load
+		self.onClose.append(self.stopBusy)
 
 		self.onLayoutFinish.append(self.finishLayout)
 		# getInitialData loads asynchronously now; the steps that need the
@@ -595,6 +603,7 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 		def onDone(serverData, error):
 			self.onServerDataReady(serverData, error, initialLoad)
 
+		self.startBusy()
 		runInThread(work, onDone)
 
 		printl("", self, "C")
@@ -604,6 +613,8 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 	#===========================================================================
 	def onServerDataReady(self, serverData, error, initialLoad=False):
 		printl("", self, "S")
+
+		self.stopBusy()
 
 		if error is not None:
 			printl("error while loading server data: " + str(error), self, "E")
@@ -635,6 +646,7 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 	def getFilterData(self, entryData):
 		printl("", self, "S")
 
+		self.startBusy()
 		runInThread(lambda: self.plexInstance.getSectionFilter(entryData), self.onFilterDataReady)
 
 		printl("", self, "C")
@@ -644,6 +656,8 @@ class DPS_ServerMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper, DPH_Filte
 	#===========================================================================
 	def onFilterDataReady(self, menuData, error):
 		printl("", self, "S")
+
+		self.stopBusy()
 
 		if error is not None:
 			printl("error while loading filter data: " + str(error), self, "E")

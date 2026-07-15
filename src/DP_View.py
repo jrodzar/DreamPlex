@@ -285,6 +285,11 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		self["rated"] = MultiPixmap()
 
+		# rotating busy spinner, shown while the library loads in the
+		# background (see startBusy/stopBusy in DPH_ScreenHelper)
+		self["busy"] = MultiPixmap()
+		self["busy"].hide()
+
 		self["title"] = Label()
 		self["grandparentTitle"] = Label()
 
@@ -426,6 +431,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		else:
 			# we need this as dummy
 			self["stillPicture"] = Label()
+
+		# stop the busy spinner timer if the screen is closed mid-load
+		self.onClose.append(self.stopBusy)
 
 		# on layout finish we have to do some stuff
 		self.onLayoutFinish.append(self.setPara)
@@ -1696,6 +1704,16 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		forceUpdate = self.forceUpdate
 		self.forceUpdate = False
 
+		# tell the user we are working. The spinner is the indicator in the
+		# skins that ship it; only fall back to a text hint on the counter
+		# when there is no spinner (external skins), so the two never overlap
+		self.startBusy()
+		if self.getBusyWidget() is None:
+			try:
+				self["total"].setText(_("Loading..."))
+			except Exception:
+				pass
+
 		runInThread(lambda: self.loadLibrary(entryData, forceUpdate), self.onLibraryLoaded)
 
 		printl("", self, "C")
@@ -1705,6 +1723,10 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 	#===========================================================================
 	def onLibraryLoaded(self, libraryDataArr, error):
 		printl("", self, "S")
+
+		# the background request is done: drop the busy spinner (updateList
+		# below overwrites the "Loading..." hint with the real counter)
+		self.stopBusy()
 
 		if error is not None:
 			printl("error while loading library: " + str(error), self, "E")

@@ -364,6 +364,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 		self.setPoster()
 
+		# resolving the media options and building the player data are two
+		# network round trips; hint that we are working until setPlayerData
+		# replaces this with the real title
+		try:
+			self["mediaTitle"].setText(_("Loading..."))
+		except Exception:
+			pass
+
 		# asking the server for the media options is a network round trip:
 		# keep it off the enigma2 main loop so the GUI cannot freeze
 		def work():

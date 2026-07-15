@@ -368,6 +368,7 @@
   
   <!-- DPS_ViewList -->
 	<screen name="DPS_ViewList" position="0,0" size="1280,720" title=" " flags="wfNoBorder" backgroundColor="background">
+    <widget name="busy" position="914,207" size="72,72" zPosition="50" transparent="1" alphatest="blend" pixmaps="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_00.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_01.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_02.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_03.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_04.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_05.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_06.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_07.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_08.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_09.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_10.png,/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/busy/busy_11.png" />
 	<!-- background -->
 		<ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/BlueMod/images/background1-fs8.png" position="0,0" zPosition="-1" size="1280,720" transparent="0" />
 	<!-- title -->

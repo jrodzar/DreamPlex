@@ -1517,6 +1517,11 @@ msgstr "plex.tv Token:"
 msgid "plex.tv Localtoken:"
 msgstr "plex.tv Token Local:"
 
+#: /hdd/workspaces/DreamPlex/src/DP_View.py
+#: /hdd/workspaces/DreamPlex/src/DP_Player.py
+msgid "Loading..."
+msgstr "Cargando..."
+
 #~ msgid ""
 #~ "For currentlyRunning feature just activate.\n"
 #~ "For section management you have to connect your server successfully to "

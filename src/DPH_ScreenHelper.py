@@ -24,7 +24,7 @@ You should have received a copy of the GNU General Public License
 #===============================================================================
 # IMPORT
 #===============================================================================
-from enigma import eSize, getDesktop
+from enigma import eSize, getDesktop, eTimer
 
 from Components.config import config
 from Components.ActionMap import HelpableActionMap
@@ -51,6 +51,11 @@ from .__common__ import printl2 as printl, addNewScreen, closePlugin, getSkinRes
 class DPH_ScreenHelper(object):
 	width = "195"
 	height = "268"
+
+	# rotating "busy" spinner (see startBusy/stopBusy). Skins ship a
+	# MultiPixmap named "busy" with this many frames; keep the two in sync.
+	BUSY_FRAMES = 12
+	BUSY_INTERVAL_MS = 90
 	#===============================================================================
 	#
 	#===============================================================================
@@ -135,6 +140,81 @@ class DPH_ScreenHelper(object):
 					if self.Poster:
 						self.width = screen.get('width')
 						self.height = screen.get('height')
+
+		printl("", self, "C")
+
+	#===============================================================================
+	# busy spinner - a rotating MultiPixmap shown while a background request is
+	# in flight. Now that the network I/O runs off the main loop the GUI stays
+	# alive, so the user needs a hint that something is loading. Degrades to a
+	# no-op when the active skin does not ship the "busy" widget (external
+	# skins), so a text hint on the existing labels stays the universal
+	# fallback.
+	#===============================================================================
+	def getBusyWidget(self):
+		try:
+			if "busy" not in self:
+				return None
+			widget = self["busy"]
+			# widget declared in code but absent from this skin -> no instance
+			if getattr(widget, "instance", "n/a") is None:
+				return None
+			return widget
+		except Exception:
+			return None
+
+	def startBusy(self):
+		printl("", self, "S")
+
+		widget = self.getBusyWidget()
+		if widget is None:
+			printl("no busy widget in this skin", self, "D")
+			printl("", self, "C")
+			return
+
+		self._busyFrame = 0
+
+		if getattr(self, "_busyTimer", None) is None:
+			self._busyTimer = eTimer()
+			self._busyTimer.callback.append(self._busyTick)
+
+		try:
+			widget.setPixmapNum(0)
+			widget.show()
+		except Exception as e:
+			printl("could not show busy widget: " + str(e), self, "W")
+
+		self._busyTimer.start(self.BUSY_INTERVAL_MS)
+
+		printl("", self, "C")
+
+	def _busyTick(self):
+		widget = self.getBusyWidget()
+		if widget is None:
+			return
+
+		self._busyFrame = (getattr(self, "_busyFrame", 0) + 1) % self.BUSY_FRAMES
+		try:
+			widget.setPixmapNum(self._busyFrame)
+		except Exception:
+			pass
+
+	def stopBusy(self):
+		printl("", self, "S")
+
+		timer = getattr(self, "_busyTimer", None)
+		if timer is not None:
+			try:
+				timer.stop()
+			except Exception:
+				pass
+
+		widget = self.getBusyWidget()
+		if widget is not None:
+			try:
+				widget.hide()
+			except Exception:
+				pass
 
 		printl("", self, "C")
 
