@@ -477,6 +477,7 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 				self.cfglist.append(getConfigListEntry(_(" >> Segmentsize in seconds"), self.current.segments, _("You need gstreamer_fragmented installed for this feature! Please check in System ... ")))
 			else:
 				self.cfglist.append(getConfigListEntry(_(" >> Transcoding quality"), self.current.uniQuality, _("You need gstreamer_fragmented installed for this feature! Please check in System ... ")))
+				self.cfglist.append(getConfigListEntry(_(" >> Transcoding video codec"), self.current.transcodeVideoCodec, _("H.264 works everywhere. HEVC/H.265 halves the bitrate but the server must be Plex Pass with hardware encoding enabled ('Enable HEVC video encoding' in Transcoder settings, not available on AMD) - if it cannot, the server silently falls back to H.264.")))
 
 		elif self.current.playbackType.value == "2":
 			self.useMappings = True
