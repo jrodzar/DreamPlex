@@ -3337,6 +3337,11 @@ class PlexLibrary(Screen):
 	def getUniversalTranscoderSettings(self):
 		printl("", self, "S")
 
+		if self.getTranscodeVideoCodec() == "hevc":
+			videoQuality, videoResolution, maxVideoBitrate = self.getHevcTranscoderSettings()
+			printl("", self, "C")
+			return videoQuality, videoResolution, maxVideoBitrate
+
 		quality = int(self.g_serverConfig.uniQuality.value)
 
 		if quality == 0:
@@ -3401,6 +3406,52 @@ class PlexLibrary(Screen):
 	#===========================================================================
 	#
 	#===========================================================================
+	def getHevcTranscoderSettings(self):
+		"""Quality ladder for hevc output: (resolution, kbps, videoQuality).
+
+		Same bitrates as the h264 ladder, but each step asks for a bigger
+		frame - hevc carries at 3 Mbps roughly what h264 needs 5 for, so the
+		efficiency is spent on resolution rather than on bandwidth, and the
+		top steps can go past the 1080p ceiling of the h264 ladder.
+		"""
+		ladder = [
+			("568x320", "320", "30"),
+			("720x480", "720", "40"),
+			("1280x720", "1500", "60"),
+			("1280x720", "2000", "60"),
+			("1920x1080", "3000", "75"),
+			("1920x1080", "4000", "80"),
+			("2560x1440", "8000", "90"),
+			("3840x2160", "10000", "100"),
+		]
+
+		try:
+			quality = int(self.g_serverConfig.uniQualityHevc.value)
+		except (AttributeError, ValueError):
+			# a server entry written by an older version has no hevc ladder
+			quality = -1
+
+		if quality < 0 or quality >= len(ladder):
+			printl("no hevc quality setting, falling back to 1080p", self, "W")
+			quality = 4
+
+		videoResolution, maxVideoBitrate, videoQuality = ladder[quality]
+		printl("hevc quality %s: %s @ %s kbps" % (quality, videoResolution, maxVideoBitrate), self, "I")
+
+		return videoQuality, videoResolution, maxVideoBitrate
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def getTranscodeVideoCodec(self):
+		"""Output codec chosen for this server, h264 when unset."""
+		codec = getattr(self.g_serverConfig, "transcodeVideoCodec", None)
+
+		return codec.value if codec is not None else "h264"
+
+	#===========================================================================
+	#
+	#===========================================================================
 	def getTranscodeProfileExtra(self):
 		"""Client-profile directive asking the PMS to encode to HEVC.
 
@@ -3412,10 +3463,7 @@ class PlexLibrary(Screen):
 
 		Returns None for H.264, i.e. leave the server's own profile alone.
 		"""
-		codec = getattr(self.g_serverConfig, "transcodeVideoCodec", None)
-		codec = codec.value if codec is not None else "h264"
-
-		if codec != "hevc":
+		if self.getTranscodeVideoCodec() != "hevc":
 			return None
 
 		return "append-transcode-target-codec(type=videoProfile&context=streaming&protocol=hls&videoCodec=hevc)"
