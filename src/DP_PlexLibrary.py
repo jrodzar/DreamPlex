@@ -2717,7 +2717,7 @@ class PlexLibrary(Screen):
 		playerData["playbackType"] = self.serverConfig_playbackType
 		playerData["connectionType"] = self.serverConfig_connectionType
 		playerData["localAuth"] = self.serverConfig_localAuth
-		playerData["transcodingSession"] = self.g_sessionID
+		playerData["transcodingSession"] = self.g_playSessionID or self.g_sessionID
 		playerData["videoData"] = self.streams['videoData']
 		playerData["mediaData"] = self.streams['mediaData']
 
@@ -3526,6 +3526,13 @@ class PlexLibrary(Screen):
 
 		filename = '/'.join(url.split('/')[3:])
 
+		# the transcode has to run under the same id the timeline reports
+		# talk about, otherwise the server sees a stream under one identity
+		# and progress under another, and shows neither in its dashboard.
+		# Upstream used the client uuid here, which never changes, so every
+		# playback of the whole session shared one transcode id
+		session = self.g_playSessionID or self.g_sessionID
+
 		transcode = []
 		if self.g_serverConfig.universalTranscoder.value:
 			videoQuality, videoResolution, maxVideoBitrate = self.getUniversalTranscoderSettings()
@@ -3533,7 +3540,7 @@ class PlexLibrary(Screen):
 			streamPath = "video/:/transcode/universal"
 			streamFile = 'start.m3u8'
 			transcode.append("path=%s%s" % (quote_plus('http://127.0.0.1:32400'), quote_plus(self.urlPath)))
-			transcode.append("session=%s" % self.g_sessionID)
+			transcode.append("session=%s" % session)
 			transcode.append("protocol=hls")
 			transcode.append("offset=0")
 			transcode.append("3g=0")
@@ -3559,7 +3566,7 @@ class PlexLibrary(Screen):
 			transcode.append("ratingKey=%s" % myID)
 			transcode.append("offset=0")
 			transcode.append("quality=%d" % int(self.serverConfig_quality))
-			transcode.append("session=%s" % self.g_sessionID)
+			transcode.append("session=%s" % session)
 			transcode.append("secondsPerSegment=%d" % int(self.g_segments))
 			transcode.append("url=%s%s" % (quote_plus('http://127.0.0.1:32400/'), quote_plus(filename)))
 			transcode.append("key=%s%s" % (quote_plus('http://127.0.0.1:32400/library/metadata/'), myID))

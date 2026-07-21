@@ -124,7 +124,9 @@ class TestUniversalTranscoder(PlaybackTestCase):
 		self.assertNotIn("x-plex-access-time", headers)
 
 		query = prefetch["query"]
-		self.assertEqual(query.get("session"), [plex.g_sessionID])
+		# the transcode runs under the playback session, not under the
+		# client uuid: the server has to see stream and reports as one
+		self.assertEqual(query.get("session"), [plex.g_playSessionID])
 		self.assertEqual(query.get("protocol"), ["hls"])
 		self.assertEqual(query.get("X-Plex-Token"), ["LOCAL-TOKEN"])
 		# the universal transcoder needs the library path of the item
@@ -204,7 +206,7 @@ class TestUniversalTranscoder(PlaybackTestCase):
 
 		self.assertTrue(playUrl.startswith(
 			"http://%s/video/:/transcode/universal/start.m3u8?" % self.mock.address))
-		self.assertIn("session=%s" % plex.g_sessionID, playUrl)
+		self.assertIn("session=%s" % plex.g_playSessionID, playUrl)
 		self.assertIn("&X-Plex-Token=LOCAL-TOKEN", playUrl)
 
 	def test_fallback_when_server_answers_error(self):
@@ -252,6 +254,18 @@ class TestPlaybackSession(PlaybackTestCase):
 		headers = self.mock.requests_for(self.M3U8_PATH)[-1]["headers"]
 		self.assertEqual(headers.get("x-plex-session-identifier"),
 						playerData["playSessionID"])
+
+	def test_transcode_and_reports_share_one_identity(self):
+		# the whole point: the server has to be able to match the stream it
+		# is transcoding with the progress reports coming in
+		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
+						helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1")
+		playerData = self.playFirstPart(plex)
+
+		query = self.mock.requests_for(self.M3U8_PATH)[-1]["query"]
+		self.assertEqual(query.get("session"), [playerData["playSessionID"]])
+		self.assertEqual(playerData["transcodingSession"], playerData["playSessionID"])
 
 	def test_session_is_appended_only_once(self):
 		plex = self.newPlex(playbackType="0")
