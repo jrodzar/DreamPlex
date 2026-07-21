@@ -64,7 +64,7 @@ from .DPH_Singleton import Singleton
 #from .DP_Summary import DreamplexPlayerSummary
 from .DPH_ScreenHelper import DPH_ScreenHelper
 
-from .__common__ import printl2 as printl, buildMediaChoiceName, encodeThat, runInThread, fireAndForget
+from .__common__ import printl2 as printl, buildMediaChoiceName, encodeThat, runInThread, fireAndForget, PlaybackClock
 from .__init__ import _  # _ is translation
 
 
@@ -154,6 +154,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	isVisible = False
 	playbackType = None
 	playSessionID = None
+	playbackClock = None
 	timelineWatcher = None
 	whatPoster = None
 	subtitleStreams = None
@@ -965,6 +966,12 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			printl("we are a multiuser server", self, "D")
 			self.multiUser = True
 
+		# our own clock, because in transcoded HLS the decoder never has a
+		# position to offer. Starts at zero: resuming goes through doSeek(),
+		# which syncs it to the target
+		self.playbackClock = PlaybackClock()
+		self.playbackClock.start(0)
+
 		# the timer only fires after its interval, so the server would not
 		# hear about this playback for another 5 seconds: report at once
 		self.updateTimeline()
@@ -983,6 +990,9 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			self.transcoderHeartbeat.start(10000, False)
 
 		super(DP_Player, self).pauseService()
+
+		if self.playbackClock is not None:
+			self.playbackClock.pause()
 
 		if self.timelineWatcher is not None:
 			# report the pause before going quiet, otherwise the dashboard
@@ -1003,6 +1013,9 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 		if self.transcoderHeartbeat is not None:
 			self.transcoderHeartbeat.stop()
+
+		if self.playbackClock is not None:
+			self.playbackClock.resume()
 
 		if self.timelineWatcher is not None:
 			# same 5s as everywhere else: at 30s the dashboard kept showing
@@ -1392,20 +1405,21 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		printl("", self, "S")
 
 		try:
-			# same (result, pts) contract as in updateTimeline(). Reading
-			# the pts blindly used to leave currentTime negative, which
-			# fell through to the "end of file" branch below and scrobbled
-			# the media as watched without anybody having watched it
-			position = self.getPlayPosition()
+			# decoder when valid, own clock in HLS - reading the decoder
+			# blindly used to leave currentTime negative here, which fell
+			# through to the "end of file" branch below and scrobbled the
+			# media as watched without anybody having watched it
+			currentTime = self.getPlaybackPosition()
 			totalTime = self.getMediaDuration()
-			valid = position[0] == 0 and totalTime > 0
+			valid = currentTime is not None and currentTime > 0 and totalTime > 0
 
 			if not EOF and not valid:
 				printl("no valid play position, reporting nothing", self, "D")
 				printl("", self, "C")
 				return
 
-			currentTime = int(position[1] / 90000) if position[0] == 0 else 0
+			if currentTime is None:
+				currentTime = 0
 			printl("progress data available, ...", self, "D")
 
 			if not EOF and currentTime is not None and currentTime > 0 and totalTime is not None and totalTime > 0:
@@ -1549,6 +1563,54 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	#===========================================================================
 	#
 	#===========================================================================
+	def getPlaybackPosition(self):
+		"""Seconds into the media: the decoder when it knows, our clock when
+		it does not.
+
+		getPlayPosition() returns (result, pts) and the pts only means
+		something when result is 0 - which in transcoded HLS is never, so
+		there the PlaybackClock estimate is all there is. When the decoder
+		IS valid (plain files) it wins and the clock is resynced to it.
+		"""
+		try:
+			position = self.getPlayPosition()
+			if position[0] == 0:
+				seconds = int(position[1] / 90000)
+				if seconds >= 0:
+					if self.playbackClock is not None:
+						self.playbackClock.syncTo(seconds)
+					return seconds
+		except Exception:
+			pass
+
+		if self.playbackClock is not None:
+			return self.playbackClock.tell()
+
+		return None
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def doSeek(self, pts):
+		# keep the clock on the jump target, otherwise every resume or
+		# absolute seek in HLS would leave the estimate at the old spot
+		if self.playbackClock is not None and pts is not None and pts >= 0:
+			self.playbackClock.syncTo(int(pts / 90000))
+
+		super(DP_Player, self).doSeek(pts)
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def doSeekRelative(self, pts):
+		if self.playbackClock is not None and pts is not None:
+			self.playbackClock.add(int(pts / 90000))
+
+		super(DP_Player, self).doSeekRelative(pts)
+
+	#===========================================================================
+	#
+	#===========================================================================
 	def buildTimelineUrl(self, state, currentTime, totalTime):
 		"""Timeline report the server builds its "now playing" entry from.
 
@@ -1574,26 +1636,18 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		printl("", self, "S")
 
 		try:
-			# both return (result, pts) and the pts is only meaningful when
-			# result is 0. Upstream read the pts blindly, so while the
-			# service was still coming up the reports went out with values
-			# like -60002501940670 and the server dropped them on the floor
-			position = self.getPlayPosition()
-
-			if position[0] != 0:
-				printl("no valid play position yet, nothing to report", self, "D")
-				printl("", self, "C")
-				return True
-
-			currentTime = int(position[1] / 90000)
+			# decoder position when valid, own clock in transcoded HLS -
+			# upstream read the decoder blindly and reported garbage like
+			# time=-60002501940670000, which the server drops on the floor
+			currentTime = self.getPlaybackPosition()
 
 			# the length has to come from the metadata: a transcoded HLS
 			# stream does not report one, so getPlayLength() answers with
 			# garbage there and asking it would silence every report
 			totalTime = self.getMediaDuration()
 
-			if totalTime <= 0:
-				printl("no duration known, nothing to report", self, "D")
+			if currentTime is None or totalTime <= 0:
+				printl("no position or duration to report", self, "D")
 				printl("", self, "C")
 				return True
 

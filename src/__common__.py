@@ -673,6 +673,56 @@ def newPlaybackId():
 #===============================================================================
 
 
+class PlaybackClock(object):
+	"""Wall-clock estimate of the play position.
+
+	enigma2 has no position to offer for a transcoded HLS stream -
+	getPlayPosition() answers (-1, garbage) on every single tick - so
+	somebody has to keep the time or the server can never be told where
+	playback is. Seconds are counted while running and the caller syncs
+	in the decoder position whenever that one IS valid, so plain files
+	stay sample-accurate and HLS gets an honest estimate.
+	"""
+
+	def __init__(self, timeSource=None):
+		self._time = timeSource or time.time
+		self._base = 0
+		self._mark = None  # wall time the clock started running, None = paused
+
+	def start(self, seconds=0):
+		self._base = max(0, int(seconds))
+		self._mark = self._time()
+
+	def pause(self):
+		if self._mark is not None:
+			self._base = self.tell()
+			self._mark = None
+
+	def resume(self):
+		if self._mark is None:
+			self._mark = self._time()
+
+	def syncTo(self, seconds):
+		"""Adopt a known-good position, keeping the running state."""
+		self._base = max(0, int(seconds))
+		if self._mark is not None:
+			self._mark = self._time()
+
+	def add(self, seconds):
+		"""Follow a relative jump (skip keys); clamped at zero."""
+		self.syncTo(self.tell() + int(seconds))
+
+	def tell(self):
+		if self._mark is None:
+			return int(self._base)
+
+		return int(self._base + (self._time() - self._mark))
+
+#===============================================================================
+#
+#===============================================================================
+
+
 def setBoxInformation():
 	printl2("", "__common__::_setBoxtype", "C")
 
