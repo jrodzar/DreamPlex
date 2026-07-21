@@ -1392,8 +1392,21 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		printl("", self, "S")
 
 		try:
-			currentTime = int(self.getPlayPosition()[1] / 90000)
-			totalTime = int(self.getPlayLength()[1] / 90000)
+			# same (result, pts) contract as in updateTimeline(). Reading
+			# the pts blindly used to leave currentTime negative, which
+			# fell through to the "end of file" branch below and scrobbled
+			# the media as watched without anybody having watched it
+			position = self.getPlayPosition()
+			length = self.getPlayLength()
+			valid = position[0] == 0 and length[0] == 0 and length[1] > 0
+
+			if not EOF and not valid:
+				printl("no valid play position, reporting nothing", self, "D")
+				printl("", self, "C")
+				return
+
+			currentTime = int(position[1] / 90000) if valid else 0
+			totalTime = int(length[1] / 90000) if valid else 0
 			printl("progress data available, ...", self, "D")
 
 			if not EOF and currentTime is not None and currentTime > 0 and totalTime is not None and totalTime > 0:
@@ -1533,8 +1546,20 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		printl("", self, "S")
 
 		try:
-			currentTime = int(self.getPlayPosition()[1] / 90000)
-			totalTime = int(self.getPlayLength()[1] / 90000)
+			# both return (result, pts) and the pts is only meaningful when
+			# result is 0. Upstream read the pts blindly, so while the
+			# service was still coming up the reports went out with values
+			# like -60002501940670 and the server dropped them on the floor
+			position = self.getPlayPosition()
+			length = self.getPlayLength()
+
+			if position[0] != 0 or length[0] != 0 or length[1] <= 0:
+				printl("no valid play position yet, nothing to report", self, "D")
+				printl("", self, "C")
+				return True
+
+			currentTime = int(position[1] / 90000)
+			totalTime = int(length[1] / 90000)
 			progress = int((float(currentTime) / float(totalTime)) * 100)
 		except:
 			return
