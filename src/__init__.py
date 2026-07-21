@@ -250,12 +250,19 @@ def initServerEntryConfig():
 	# encoding enabled and is silently ignored (falling back to h264) when the
 	# server cannot honour it - see getTranscodeProfileExtra()
 	config.plugins.dreamplex.Entries[i].transcodeVideoCodec = ConfigSelection(default="h264", choices=[("h264", _("H.264 (compatible)")), ("hevc", _("HEVC/H.265 (experimental)"))])
+	# hevc carries the same picture in clearly less bitrate, so its ladder
+	# spends that on resolution instead: every step shows what h264 shows one
+	# or two steps higher, and the top ones go beyond 1080p - see
+	# getUniversalTranscoderSettings()
+	config.plugins.dreamplex.Entries[i].uniQualityHevc = ConfigSelection(default="3", choices=[("0", _("568x320, 320kbps")), ("1", _("720x480, 720 kbps")), ("2", _("1280x720, 1,5mbps")), ("3", _("1280x720, 2mbps")), ("4", _("1920x1080, 3mbps")), ("5", _("1920x1080, 4mbps")), ("6", _("2560x1440, 8mbps")), ("7", _("3840x2160, 10mbps"))])
 
 	printl("=== TRANSCODED ===", "__init__::initServerEntryConfig", "D")
 	printl("universalTranscoder: " + str(config.plugins.dreamplex.Entries[i].universalTranscoder.value), "__init__::initServerEntryConfig", "D")
 	printl("quality: " + str(config.plugins.dreamplex.Entries[i].quality.value), "__init__::initServerEntryConfig", "D")
 	printl("segments: " + str(config.plugins.dreamplex.Entries[i].segments.value), "__init__::initServerEntryConfig", "D")
 	printl("uniQuality: " + str(config.plugins.dreamplex.Entries[i].uniQuality.value), "__init__::initServerEntryConfig", "D")
+	printl("uniQualityHevc: " + str(config.plugins.dreamplex.Entries[i].uniQualityHevc.value), "__init__::initServerEntryConfig", "D")
+	printl("transcodeVideoCodec: " + str(config.plugins.dreamplex.Entries[i].transcodeVideoCodec.value), "__init__::initServerEntryConfig", "D")
 	# TRANSCODED VIA PROXY
 
 	# DIRECT LOCAL

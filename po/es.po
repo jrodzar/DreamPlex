@@ -1494,6 +1494,10 @@ msgid "H.264 works everywhere. HEVC/H.265 halves the bitrate but the server must
 msgstr "H.264 funciona en cualquier equipo. HEVC/H.265 reduce el bitrate a la mitad, pero el servidor debe tener Plex Pass con codificación por hardware activada ('Enable HEVC video encoding' en los ajustes del transcodificador; no disponible en AMD). Si no puede, el servidor vuelve a H.264 sin avisar."
 
 #: /hdd/workspaces/DreamPlex/src/DP_Server.py
+msgid "Same bitrates as H.264 but a bigger picture at every step, because HEVC needs clearly less bitrate for the same quality. 1440p and 2160p ask a lot from the server and only pay off with a source of that resolution."
+msgstr "Los mismos bitrates que en H.264 pero con más resolución en cada escalón, porque HEVC necesita bastante menos bitrate para la misma calidad. 1440p y 2160p exigen mucho al servidor y solo compensan si el original tiene esa resolución."
+
+#: /hdd/workspaces/DreamPlex/src/DP_Server.py
 msgid " >> plex.tv Token"
 msgstr " >> Token de plex.tv"
 

@@ -154,6 +154,39 @@ class TestUniversalTranscoder(PlaybackTestCase):
 		self.assertIn("type=videoProfile", profile)
 		self.assertEqual(headers.get("x-plex-client-profile-name"), "generic")
 
+	def test_h264_ladder_is_untouched(self):
+		plex = self.newPlex(playbackType="1", uniQuality="4")
+
+		self.assertEqual(plex.getUniversalTranscoderSettings(),
+						("75", "1280x720", "3000"))
+
+	def test_hevc_uses_its_own_ladder(self):
+		# same bitrate as h264 step 4, but 1080p instead of 720p
+		plex = self.newPlex(playbackType="1", transcodeVideoCodec="hevc",
+						uniQuality="4", uniQualityHevc="4")
+
+		self.assertEqual(plex.getUniversalTranscoderSettings(),
+						("75", "1920x1080", "3000"))
+
+	def test_hevc_ladder_reaches_beyond_1080p(self):
+		plex = self.newPlex(playbackType="1", transcodeVideoCodec="hevc",
+						uniQualityHevc="7")
+
+		videoQuality, videoResolution, maxVideoBitrate = plex.getUniversalTranscoderSettings()
+		self.assertEqual(videoResolution, "3840x2160")
+		self.assertEqual(maxVideoBitrate, "10000")
+
+	def test_hevc_ladder_travels_in_the_session_url(self):
+		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
+						helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1", transcodeVideoCodec="hevc",
+						uniQualityHevc="6")
+		self.playFirstPart(plex)
+
+		query = self.mock.requests_for(self.M3U8_PATH)[-1]["query"]
+		self.assertEqual(query.get("videoResolution"), ["2560x1440"])
+		self.assertEqual(query.get("maxVideoBitrate"), ["8000"])
+
 	def test_fallback_to_master_playlist_when_no_media_urls(self):
 		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
 						helpers.fixture("start_comments_only.m3u8"))
