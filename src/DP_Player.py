@@ -1397,16 +1397,15 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			# fell through to the "end of file" branch below and scrobbled
 			# the media as watched without anybody having watched it
 			position = self.getPlayPosition()
-			length = self.getPlayLength()
-			valid = position[0] == 0 and length[0] == 0 and length[1] > 0
+			totalTime = self.getMediaDuration()
+			valid = position[0] == 0 and totalTime > 0
 
 			if not EOF and not valid:
 				printl("no valid play position, reporting nothing", self, "D")
 				printl("", self, "C")
 				return
 
-			currentTime = int(position[1] / 90000) if valid else 0
-			totalTime = int(length[1] / 90000) if valid else 0
+			currentTime = int(position[1] / 90000) if position[0] == 0 else 0
 			printl("progress data available, ...", self, "D")
 
 			if not EOF and currentTime is not None and currentTime > 0 and totalTime is not None and totalTime > 0:
@@ -1521,6 +1520,35 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	#===========================================================================
 	#
 	#===========================================================================
+	def getMediaDuration(self):
+		"""Length in seconds, from the metadata rather than the decoder.
+
+		getPlayLength() has nothing to say about a transcoded HLS stream,
+		so the only reliable source is what the server told us about the
+		media when it was opened.
+		"""
+		try:
+			duration = int(self.videoData.get("duration", 0))
+		except (AttributeError, TypeError, ValueError):
+			return 0
+
+		if duration > 0:
+			return int(duration / 1000)  # plex reports milliseconds
+
+		# no metadata: fall back to the decoder, which is right for a
+		# plain file even if it is useless for HLS
+		try:
+			length = self.getPlayLength()
+			if length[0] == 0 and length[1] > 0:
+				return int(length[1] / 90000)
+		except Exception:
+			pass
+
+		return 0
+
+	#===========================================================================
+	#
+	#===========================================================================
 	def buildTimelineUrl(self, state, currentTime, totalTime):
 		"""Timeline report the server builds its "now playing" entry from.
 
@@ -1551,15 +1579,24 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			# service was still coming up the reports went out with values
 			# like -60002501940670 and the server dropped them on the floor
 			position = self.getPlayPosition()
-			length = self.getPlayLength()
 
-			if position[0] != 0 or length[0] != 0 or length[1] <= 0:
+			if position[0] != 0:
 				printl("no valid play position yet, nothing to report", self, "D")
 				printl("", self, "C")
 				return True
 
 			currentTime = int(position[1] / 90000)
-			totalTime = int(length[1] / 90000)
+
+			# the length has to come from the metadata: a transcoded HLS
+			# stream does not report one, so getPlayLength() answers with
+			# garbage there and asking it would silence every report
+			totalTime = self.getMediaDuration()
+
+			if totalTime <= 0:
+				printl("no duration known, nothing to report", self, "D")
+				printl("", self, "C")
+				return True
+
 			progress = int((float(currentTime) / float(totalTime)) * 100)
 		except:
 			return
