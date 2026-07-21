@@ -1493,6 +1493,18 @@ msgstr "HEVC/H.265 (experimental)"
 msgid "H.264 works everywhere. HEVC/H.265 halves the bitrate but the server must be Plex Pass with hardware encoding enabled ('Enable HEVC video encoding' in Transcoder settings, not available on AMD) - if it cannot, the server silently falls back to H.264."
 msgstr "H.264 funciona en cualquier equipo. HEVC/H.265 reduce el bitrate a la mitad, pero el servidor debe tener Plex Pass con codificación por hardware activada ('Enable HEVC video encoding' en los ajustes del transcodificador; no disponible en AMD). Si no puede, el servidor vuelve a H.264 sin avisar."
 
+#: /hdd/workspaces/DreamPlex/src/DP_Server.py
+msgid " >> plex.tv Token"
+msgstr " >> Token de plex.tv"
+
+#: /hdd/workspaces/DreamPlex/src/DP_Server.py
+msgid "Filled in automatically after a successful login. You can also paste a token here to use one issued elsewhere - leave it empty to force a fresh login with the username and password above."
+msgstr "Se rellena solo tras un inicio de sesión correcto. También puedes pegar aquí un token emitido en otro sitio; déjalo vacío para forzar un nuevo inicio de sesión con el usuario y la contraseña de arriba."
+
+#: /hdd/workspaces/DreamPlex/src/DP_PlexLibrary.py
+msgid "plex.tv username or password missing in the server settings"
+msgstr "Falta el usuario o la contraseña de plex.tv en los ajustes del servidor"
+
 #~ msgid ""
 #~ "For currentlyRunning feature just activate.\n"
 #~ "For section management you have to connect your server successfully to "

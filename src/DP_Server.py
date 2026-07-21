@@ -546,6 +546,7 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 		self.cfglist.append(getConfigListEntry(_(" >> plex.tv URL"), self.current.myplexUrl, ''))
 		self.cfglist.append(getConfigListEntry(_(" >> plex.tv Username"), self.current.myplexUsername, ''))
 		self.cfglist.append(getConfigListEntry(_(" >> plex.tv Password"), self.current.myplexPassword, ''))
+		self.cfglist.append(getConfigListEntry(_(" >> plex.tv Token"), self.current.myplexToken, _("Filled in automatically after a successful login. You can also paste a token here to use one issued elsewhere - leave it empty to force a fresh login with the username and password above.")))
 
 		self.cfglist.append(getConfigListEntry(_(" >> plex.tv Home Users"), self.current.myplexHomeUsers, _("Use Home Users?")))
 		if self.current.myplexHomeUsers.value:
@@ -674,7 +675,15 @@ class DPS_ServerConfig(ConfigListScreen, Screen, DPH_PlexScreen):
 		self.current.machineIdentifier.value = machineIdentifiers
 		printl("machineIdentifier: " + str(self.current.machineIdentifier.value), self, "D")
 
-		if self.current.connectionType.value == "2" or self.current.localAuth.value:
+		# Only sign in to plex.tv when there is no token yet. Re-authenticating
+		# on every save breaks servers provisioned with a token but no stored
+		# password (the token is what runtime uses anyway - see
+		# setMyPlexData), turning any edit into "Invalid email, username, or
+		# password". Clear the token field to force a fresh login.
+		needsToken = (self.current.connectionType.value == "2" or self.current.localAuth.value) \
+					and not self.current.myplexToken.value
+
+		if needsToken:
 			self.keyBlue()
 		else:
 			self.saveNow()
