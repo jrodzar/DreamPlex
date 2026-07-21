@@ -959,10 +959,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			self.multiUser = True
 
 		# our own clock, because in transcoded HLS the decoder never has a
-		# position to offer. Starts at zero: resuming goes through doSeek(),
-		# which syncs it to the target
+		# position to offer. Starts at the resume point so the very first
+		# report already lands where playback actually is, not at zero
 		self.playbackClock = PlaybackClock()
-		self.playbackClock.start(0)
+		try:
+			startAt = int(self.resumeStamp) if self.resumeStamp else 0
+		except (TypeError, ValueError):
+			startAt = 0
+		self.playbackClock.start(startAt)
 
 		# the timer only fires after its interval, so the server would not
 		# hear about this playback for another 5 seconds: report at once
@@ -1662,16 +1666,15 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			printl("currentTime: " + str(currentTime), self, "C")
 			printl("totalTime: " + str(totalTime), self, "C")
 
-			seekState = self.seekstate
-
-			if seekState == self.SEEK_STATE_PAUSE:
+			# only a real pause is "paused"; everything else - playing,
+			# buffering (throttled server), fast forward - is the user
+			# watching, so report "playing". The old code only accepted
+			# SEEK_STATE_PLAY and dropped every report while the server
+			# throttled, which is most of a well-buffered stream
+			if self.seekstate == self.SEEK_STATE_PAUSE:
 				state = "paused"
-			elif seekState == self.SEEK_STATE_PLAY:
-				state = "playing"
 			else:
-				# nothing worth telling the server about
-				printl("", self, "C")
-				return True
+				state = "playing"
 
 			printl("Movies %s time: %s secs of %s @ %s%%" % (state.upper(), currentTime, totalTime, progress), self, "D")
 
