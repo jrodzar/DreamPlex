@@ -57,7 +57,7 @@ from Tools.Directories import fileExists, copyfile
 from Screens.Screen import Screen
 
 from .__plugin__ import getPlugin, Plugin
-from .__common__ import printl2 as printl, getXmlContent, getPlexHeader, encodeThat, getUUID, revokeCacheFiles
+from .__common__ import printl2 as printl, getXmlContent, getPlexHeader, encodeThat, getUUID, newPlaybackId, revokeCacheFiles
 from . import _, defaultPluginFolderPath  # _ is translation
 
 #===============================================================================
@@ -96,6 +96,11 @@ PLEXTV_SERVER = "plex.tv"
 class PlexLibrary(Screen):
 
 	g_sessionID = None
+	# one X-Plex-Session-Identifier per playback: this is what lets the
+	# server tie the stream and the timeline reports together and show the
+	# box in its "now playing" dashboard. Without it the reports still move
+	# the resume point, but no session ever appears.
+	g_playSessionID = None
 	g_sections = []
 	serverConfig_Name = "Plexserver"
 	g_host = "192.168.45.190"
@@ -1769,6 +1774,11 @@ class PlexLibrary(Screen):
 		self.fallback = False
 		self.locations = ""
 
+		# a new media starts here, and the transcode this may kick off has
+		# to be filed under the same session as the playback itself
+		self.g_playSessionID = newPlaybackId()
+		printl("playback session: " + str(self.g_playSessionID), self, "D")
+
 		#First determine what sort of 'file' file is
 		printl("physical file location: " + str(myFile), self, "I")
 		try:
@@ -2601,6 +2611,10 @@ class PlexLibrary(Screen):
 		if url is None:
 			return
 
+		# normally mediaType() already opened one for this media
+		if not self.g_playSessionID:
+			self.g_playSessionID = newPlaybackId()
+
 		protocol = url.split(':', 1)[0]
 
 		# set standard playurl
@@ -2689,11 +2703,16 @@ class PlexLibrary(Screen):
 
 		printl("mh: isExtraData=" + str(isExtraData), self, "D")
 
+		# local files never touch the server, so they get no session
+		if protocol != "file":
+			playurl = self.appendSessionToUrl(playurl)
+
 		playerData = {}
 		playerData["playUrl"] = playurl
 		playerData["resumeStamp"] = resume
 		playerData["server"] = self.server
 		playerData["id"] = myId
+		playerData["playSessionID"] = self.g_playSessionID
 		playerData["multiUserServer"] = self.g_multiUser
 		playerData["playbackType"] = self.serverConfig_playbackType
 		playerData["connectionType"] = self.serverConfig_connectionType
@@ -3285,6 +3304,25 @@ class PlexLibrary(Screen):
 	#===========================================================================
 	#
 	#===========================================================================
+	def appendSessionToUrl(self, url):
+		"""Append X-Plex-Session-Identifier to a playback URL (idempotent).
+
+		The media player fetches the URL on its own, without our headers,
+		so this has to travel in the URL for the server to recognise the
+		stream as part of the session the timeline reports talk about.
+		"""
+		if not url or not self.g_playSessionID:
+			return url
+
+		if "X-Plex-Session-Identifier=" in url:
+			return url
+
+		separator = "&" if "?" in url else "?"
+		return url + separator + "X-Plex-Session-Identifier=" + str(self.g_playSessionID)
+
+	#===========================================================================
+	#
+	#===========================================================================
 	def get_uTokenForServer(self, server):
 		printl("", self, "S")
 
@@ -3412,7 +3450,13 @@ class PlexLibrary(Screen):
 		Same bitrates as the h264 ladder, but each step asks for a bigger
 		frame - hevc carries at 3 Mbps roughly what h264 needs 5 for, so the
 		efficiency is spent on resolution rather than on bandwidth, and the
-		top steps can go past the 1080p ceiling of the h264 ladder.
+		last step goes past the 1080p ceiling of the h264 ladder.
+
+		It stops at 1440p on purpose. Measured against a 1.43 server: asking
+		2560x1440 of a 3840x2072 source really delivered 2558x1380, while
+		asking 3840x2160 came back downscaled to 1920x1036 - the server will
+		not encode 2160p, so offering it would only promise what it cannot
+		deliver.
 		"""
 		ladder = [
 			("568x320", "320", "30"),
@@ -3422,7 +3466,6 @@ class PlexLibrary(Screen):
 			("1920x1080", "3000", "75"),
 			("1920x1080", "4000", "80"),
 			("2560x1440", "8000", "90"),
-			("3840x2160", "10000", "100"),
 		]
 
 		try:
@@ -3532,6 +3575,12 @@ class PlexLibrary(Screen):
 		# session and answers with the media playlist location(s)
 		req = Request(self.appendTokenToUrl(streamURL, server), headers=getPlexHeader(self.g_sessionID))
 		req.add_header('X-Plex-Client-Capabilities', self.g_capability)
+
+		# this request is what opens the transcode: carrying the session id
+		# is what lets the server file it under the playback the timeline
+		# reports are about, instead of an anonymous transcode
+		if self.g_playSessionID:
+			req.add_header("X-Plex-Session-Identifier", str(self.g_playSessionID))
 
 		# ask for HEVC when the user enabled it: this request is the one that
 		# spins the session up, so the profile has to travel with it

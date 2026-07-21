@@ -4,6 +4,7 @@ Python 3 (bytes-safe m3u8 parsing), drop the 2010 X-Plex-Access
 signature, carry the X-Plex-Token in playback URLs and never crash on
 a missing token."""
 
+import re
 import unittest
 
 try:
@@ -13,6 +14,11 @@ except ImportError:  # direct invocation from the tests directory
 	import plexmock
 
 helpers.setup_environment()
+
+
+def withoutSession(url):
+	"""Drop the per-playback session id, which is random by design."""
+	return re.sub(r"[?&]X-Plex-Session-Identifier=[^&]*", "", url)
 
 
 class PlaybackTestCase(unittest.TestCase):
@@ -70,7 +76,7 @@ class TestStreamedPlayback(PlaybackTestCase):
 		plex = self.newPlex(playbackType="0")
 		playerData = self.playFirstPart(plex)
 
-		self.assertEqual(playerData["playUrl"],
+		self.assertEqual(withoutSession(playerData["playUrl"]),
 						"http://%s/library/parts/3001/1700000000/file.mkv?X-Plex-Token=LOCAL-TOKEN"
 						% self.mock.address)
 		self.assertEqual(playerData["resumeStamp"], 60000)
@@ -81,7 +87,7 @@ class TestStreamedPlayback(PlaybackTestCase):
 		playerData = self.playFirstPart(plex)
 
 		# upstream crashed here with TypeError: url + None
-		self.assertEqual(playerData["playUrl"],
+		self.assertEqual(withoutSession(playerData["playUrl"]),
 						"http://%s/library/parts/3001/1700000000/file.mkv" % self.mock.address)
 
 
@@ -95,7 +101,7 @@ class TestUniversalTranscoder(PlaybackTestCase):
 		playerData = self.playFirstPart(plex)
 		playUrl = playerData["playUrl"]
 
-		self.assertEqual(playUrl,
+		self.assertEqual(withoutSession(playUrl),
 						"http://%s/video/:/transcode/universal/"
 						"session/f00dcafe-0000-1111-2222-333344445555/base/index.m3u8"
 						"?X-Plex-Token=LOCAL-TOKEN" % self.mock.address)
@@ -169,12 +175,14 @@ class TestUniversalTranscoder(PlaybackTestCase):
 						("75", "1920x1080", "3000"))
 
 	def test_hevc_ladder_reaches_beyond_1080p(self):
+		# the top step is 1440p: a 1.43 server delivered it for real, but
+		# refused 2160p and silently sent 1080p instead
 		plex = self.newPlex(playbackType="1", transcodeVideoCodec="hevc",
-						uniQualityHevc="7")
+						uniQualityHevc="6")
 
 		videoQuality, videoResolution, maxVideoBitrate = plex.getUniversalTranscoderSettings()
-		self.assertEqual(videoResolution, "3840x2160")
-		self.assertEqual(maxVideoBitrate, "10000")
+		self.assertEqual(videoResolution, "2560x1440")
+		self.assertEqual(maxVideoBitrate, "8000")
 
 	def test_hevc_ladder_travels_in_the_session_url(self):
 		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
@@ -210,6 +218,49 @@ class TestUniversalTranscoder(PlaybackTestCase):
 		self.assertIn("&X-Plex-Token=LOCAL-TOKEN", playUrl)
 
 
+class TestPlaybackSession(PlaybackTestCase):
+	"""X-Plex-Session-Identifier: what the "now playing" dashboard needs.
+
+	Upstream never sent one, so the server could not tie the stream to the
+	timeline reports and the box stayed invisible while playing.
+	"""
+
+	M3U8_PATH = "/video/:/transcode/universal/start.m3u8"
+
+	def test_stream_url_carries_a_session(self):
+		plex = self.newPlex(playbackType="0")
+		playerData = self.playFirstPart(plex)
+
+		session = playerData["playSessionID"]
+		self.assertTrue(session)
+		self.assertIn("X-Plex-Session-Identifier=" + session, playerData["playUrl"])
+
+	def test_each_playback_gets_its_own_session(self):
+		plex = self.newPlex(playbackType="0")
+
+		first = self.playFirstPart(plex)["playSessionID"]
+		second = self.playFirstPart(plex)["playSessionID"]
+
+		self.assertNotEqual(first, second)
+
+	def test_transcode_request_is_filed_under_the_session(self):
+		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
+						helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1")
+		playerData = self.playFirstPart(plex)
+
+		headers = self.mock.requests_for(self.M3U8_PATH)[-1]["headers"]
+		self.assertEqual(headers.get("x-plex-session-identifier"),
+						playerData["playSessionID"])
+
+	def test_session_is_appended_only_once(self):
+		plex = self.newPlex(playbackType="0")
+		url = "http://%s/library/parts/1/file.mkv" % self.mock.address
+
+		once = plex.appendSessionToUrl(url)
+		self.assertEqual(plex.appendSessionToUrl(once), once)
+
+
 class TestSegmentedTranscoder(PlaybackTestCase):
 	M3U8_PATH = "/video/:/transcode/segmented/start.m3u8"
 
@@ -220,7 +271,7 @@ class TestSegmentedTranscoder(PlaybackTestCase):
 		playerData = self.playFirstPart(plex)
 		playUrl = playerData["playUrl"]
 
-		self.assertEqual(playUrl,
+		self.assertEqual(withoutSession(playUrl),
 						"http://%s/video/:/transcode/segmented/"
 						"session/f00dcafe-0000-1111-2222-333344445555/base/index.m3u8"
 						"?X-Plex-Token=LOCAL-TOKEN" % self.mock.address)

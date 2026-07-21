@@ -659,6 +659,20 @@ def getUUID():
 #===============================================================================
 
 
+def newPlaybackId():
+	"""Fresh id for ONE playback, used as X-Plex-Session-Identifier.
+
+	getUUID() identifies the box for as long as the plugin runs; this one
+	has to change with every media started, because the server keys the
+	session it shows in its dashboard on it.
+	"""
+	return str(uuid.uuid4())
+
+#===============================================================================
+#
+#===============================================================================
+
+
 def setBoxInformation():
 	printl2("", "__common__::_setBoxtype", "C")
 

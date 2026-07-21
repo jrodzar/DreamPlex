@@ -254,7 +254,7 @@ def initServerEntryConfig():
 	# spends that on resolution instead: every step shows what h264 shows one
 	# or two steps higher, and the top ones go beyond 1080p - see
 	# getUniversalTranscoderSettings()
-	config.plugins.dreamplex.Entries[i].uniQualityHevc = ConfigSelection(default="3", choices=[("0", _("568x320, 320kbps")), ("1", _("720x480, 720 kbps")), ("2", _("1280x720, 1,5mbps")), ("3", _("1280x720, 2mbps")), ("4", _("1920x1080, 3mbps")), ("5", _("1920x1080, 4mbps")), ("6", _("2560x1440, 8mbps")), ("7", _("3840x2160, 10mbps"))])
+	config.plugins.dreamplex.Entries[i].uniQualityHevc = ConfigSelection(default="3", choices=[("0", _("568x320, 320kbps")), ("1", _("720x480, 720 kbps")), ("2", _("1280x720, 1,5mbps")), ("3", _("1280x720, 2mbps")), ("4", _("1920x1080, 3mbps")), ("5", _("1920x1080, 4mbps")), ("6", _("2560x1440, 8mbps"))])
 
 	printl("=== TRANSCODED ===", "__init__::initServerEntryConfig", "D")
 	printl("universalTranscoder: " + str(config.plugins.dreamplex.Entries[i].universalTranscoder.value), "__init__::initServerEntryConfig", "D")
