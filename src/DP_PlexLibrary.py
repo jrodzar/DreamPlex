@@ -1576,8 +1576,13 @@ class PlexLibrary(Screen):
 
 		printl("Getting new token", self, "I")
 
-		if (self.g_myplex_username or self.g_myplex_password) == "":
-			printl("Missing plex.tv details in config...", self, "D")
+		# `(user or password) == ""` only caught an empty USERNAME: with a user
+		# set and no password it evaluated the username, so we went on to send
+		# Basic base64("user:") and plex.tv answered a confusing 401 "Invalid
+		# email, username, or password". Check both, and say what is missing.
+		if not self.g_myplex_username or not self.g_myplex_password:
+			printl("Missing plex.tv credentials in config...", self, "D")
+			self.lastResponse = _("plex.tv username or password missing in the server settings")
 
 			printl("", self, "C")
 			return False
