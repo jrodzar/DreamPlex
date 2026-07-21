@@ -153,6 +153,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	timeshift_enabled = False
 	isVisible = False
 	playbackType = None
+	playSessionID = None
 	timelineWatcher = None
 	whatPoster = None
 	subtitleStreams = None
@@ -956,6 +957,10 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			printl("we are a multiuser server", self, "D")
 			self.multiUser = True
 
+		# the timer only fires after its interval, so the server would not
+		# hear about this playback for another 5 seconds: report at once
+		self.updateTimeline()
+
 		printl("", self, "C")
 
 	#===========================================================================
@@ -969,10 +974,13 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			self.transcoderHeartbeat.callback.append(self.keepTranscoderAlive)
 			self.transcoderHeartbeat.start(10000, False)
 
-		if self.timelineWatcher is not None:
-			self.timelineWatcher.stop()
-
 		super(DP_Player, self).pauseService()
+
+		if self.timelineWatcher is not None:
+			# report the pause before going quiet, otherwise the dashboard
+			# keeps showing the stream as playing
+			self.updateTimeline()
+			self.timelineWatcher.stop()
 
 		printl("", self, "C")
 
@@ -989,7 +997,10 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			self.transcoderHeartbeat.stop()
 
 		if self.timelineWatcher is not None:
-			self.timelineWatcher.start(30000, False)
+			# same 5s as everywhere else: at 30s the dashboard kept showing
+			# the stream paused long after it had been resumed
+			self.updateTimeline()
+			self.timelineWatcher.start(5000, False)
 
 		printl("", self, "S")
 	#===========================================================================
@@ -1024,6 +1035,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		self.server = str(self.playbackData['server'])
 		self.id = str(self.playbackData['id'])
 		self.multiUserServer = self.playbackData['multiUserServer']
+		self.playSessionID = self.playbackData.get('playSessionID')
 		self.url = str(self.playbackData['playUrl'])
 		self.transcodingSession = str(self.playbackData['transcodingSession'])
 		self.playbackType = str(self.playbackData['playbackType'])
@@ -1388,8 +1400,9 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			if self.timelineWatcher is not None:
 				self.timelineWatcher.stop()
 
-				urlPath = self.server + "/:/timeline?containerKey=/library/sections/onDeck&key=/library/metadata/" + self.id + "&ratingKey=" + self.id
-				urlPath += "&state=stopped&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
+				# closes the session on the server side: without it the box
+				# lingers in the dashboard until the entry times out
+				urlPath = self.buildTimelineUrl("stopped", currentTime, totalTime)
 				fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
 
 			#Legacy PMS Server server support before MultiUser version v0.9.8.0 and if we are not connected via plex.tv
@@ -1487,6 +1500,27 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	#===========================================================================
 	#
 	#===========================================================================
+	def buildTimelineUrl(self, state, currentTime, totalTime):
+		"""Timeline report the server builds its "now playing" entry from.
+
+		`identifier` and `X-Plex-Session-Identifier` are what upstream left
+		out: without them the server still moves the resume point, but it
+		never shows the box as playing anything.
+		"""
+		urlPath = self.server + "/:/timeline?containerKey=/library/sections/onDeck"
+		urlPath += "&identifier=com.plexapp.plugins.library"
+		urlPath += "&key=/library/metadata/" + self.id + "&ratingKey=" + self.id
+		urlPath += "&state=" + state
+		urlPath += "&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
+
+		if self.playSessionID:
+			urlPath += "&X-Plex-Session-Identifier=" + str(self.playSessionID)
+
+		return urlPath
+
+	#===========================================================================
+	#
+	#===========================================================================
 	def updateTimeline(self):
 		printl("", self, "S")
 
@@ -1508,36 +1542,31 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		else:
 			self["endingTime"].hide()
 
-		if self.multiUserServer:
-			try:
-				printl("currentTime: " + str(currentTime), self, "C")
-				printl("totalTime: " + str(totalTime), self, "C")
+		try:
+			printl("currentTime: " + str(currentTime), self, "C")
+			printl("totalTime: " + str(totalTime), self, "C")
 
-				urlPath = self.server + "/:/timeline?containerKey=/library/sections/onDeck&key=/library/metadata/" + self.id + "&ratingKey=" + self.id
+			seekState = self.seekstate
 
-				seekState = self.seekstate
+			if seekState == self.SEEK_STATE_PAUSE:
+				state = "paused"
+			elif seekState == self.SEEK_STATE_PLAY:
+				state = "playing"
+			else:
+				# nothing worth telling the server about
+				printl("", self, "C")
+				return True
 
-				# this runs on a timer WHILE playing: a slow server here would
-				# stutter the GUI on every tick, so fire it in the background
-				if seekState == self.SEEK_STATE_PAUSE:
-					printl("Movies PAUSED time: %s secs of %s @ %s%%" % (currentTime, totalTime, progress), self, "D")
-					urlPath += "&state=paused&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
-					fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
+			printl("Movies %s time: %s secs of %s @ %s%%" % (state.upper(), currentTime, totalTime, progress), self, "D")
 
-				elif seekState == self.SEEK_STATE_PLAY:
-					printl("Movies PLAYING time: %s secs of %s @ %s%%" % (currentTime, totalTime, progress), self, "D")
-					urlPath += "&state=playing&time=" + str(currentTime * 1000) + "&duration=" + str(totalTime * 1000)
-					fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
+			# this runs on a timer WHILE playing: a slow server here would
+			# stutter the GUI on every tick, so fire it in the background
+			urlPath = self.buildTimelineUrl(state, currentTime, totalTime)
+			fireAndForget(lambda url=urlPath: self.plexInstance.doRequest(url))
 
-				# todo add buffering here if needed
-					#urlPath += "&state=buffering&time=" + str(currentTime*1000)
-
-				# todo add stopped here if needed
-					#urlPath += "&state=stopped&time=" + str(currentTime*1000) + "&duration=" + str(totalTime*1000)
-
-			except Exception as e:
-				printl("exception: " + str(e), self, "E")
-				return False
+		except Exception as e:
+			printl("exception: " + str(e), self, "E")
+			return False
 
 		printl("", self, "C")
 		return True
