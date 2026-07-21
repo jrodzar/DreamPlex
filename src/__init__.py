@@ -245,6 +245,11 @@ def initServerEntryConfig():
 
 	# universal transcoder settings
 	config.plugins.dreamplex.Entries[i].uniQuality = ConfigSelection(default="3", choices=[("0", _("420x240, 320kbps")), ("1", _("576x320, 720 kbps")), ("2", _("720x480, 1,5mbps")), ("3", _("1024x768, 2mbps")), ("4", _("1280x720, 3mbps")), ("5", _("1280x720, 4mbps")), ("6", _("1920x1080, 8mbps")), ("7", _("1920x1080, 10mbps")), ("8", _("1920x1080, 12mbps")), ("9", _("1920x1080, 20mbps"))])
+	# codec the universal transcoder should encode to. h264 is what every
+	# server and decoder handles; hevc needs a Plex Pass server with hardware
+	# encoding enabled and is silently ignored (falling back to h264) when the
+	# server cannot honour it - see getTranscodeProfileExtra()
+	config.plugins.dreamplex.Entries[i].transcodeVideoCodec = ConfigSelection(default="h264", choices=[("h264", _("H.264 (compatible)")), ("hevc", _("HEVC/H.265 (experimental)"))])
 
 	printl("=== TRANSCODED ===", "__init__::initServerEntryConfig", "D")
 	printl("universalTranscoder: " + str(config.plugins.dreamplex.Entries[i].universalTranscoder.value), "__init__::initServerEntryConfig", "D")

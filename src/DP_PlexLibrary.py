@@ -3396,6 +3396,28 @@ class PlexLibrary(Screen):
 	#===========================================================================
 	#
 	#===========================================================================
+	def getTranscodeProfileExtra(self):
+		"""Client-profile directive asking the PMS to encode to HEVC.
+
+		Plex has no videoCodec URL parameter - the output codec is negotiated
+		through the client profile, so this goes out as X-Plex-Client-Profile-
+		Extra on the request that starts the session. `protocol=` is
+		mandatory: without it the server drops the directive ("ClientProfile
+		Extra: missing protocol parameter") and quietly encodes H.264.
+
+		Returns None for H.264, i.e. leave the server's own profile alone.
+		"""
+		codec = getattr(self.g_serverConfig, "transcodeVideoCodec", None)
+		codec = codec.value if codec is not None else "h264"
+
+		if codec != "hevc":
+			return None
+
+		return "append-transcode-target-codec(type=videoProfile&context=streaming&protocol=hls&videoCodec=hevc)"
+
+	#=============================================================================
+	#
+	#=============================================================================
 	def transcode(self, myID, url):
 		printl("", self, "S")
 		server = self.getServerFromURL(url)
@@ -3457,6 +3479,14 @@ class PlexLibrary(Screen):
 		# session and answers with the media playlist location(s)
 		req = Request(self.appendTokenToUrl(streamURL, server), headers=getPlexHeader(self.g_sessionID))
 		req.add_header('X-Plex-Client-Capabilities', self.g_capability)
+
+		# ask for HEVC when the user enabled it: this request is the one that
+		# spins the session up, so the profile has to travel with it
+		profileExtra = self.getTranscodeProfileExtra()
+		if profileExtra:
+			printl("requesting HEVC output from the transcoder", self, "I")
+			req.add_header("X-Plex-Client-Profile-Name", "generic")
+			req.add_header("X-Plex-Client-Profile-Extra", profileExtra)
 
 		rawToken = self.get_rawTokenForServer(server)
 		if rawToken:

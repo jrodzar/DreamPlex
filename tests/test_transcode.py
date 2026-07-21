@@ -125,6 +125,35 @@ class TestUniversalTranscoder(PlaybackTestCase):
 		self.assertEqual(query.get("path"),
 						["http://127.0.0.1:32400/library/metadata/1001"])
 
+	def test_h264_is_the_default_and_asks_for_no_profile(self):
+		# leaving the server's own profile alone is what keeps h264 working
+		# on every server and decoder
+		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
+						helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1")
+
+		self.assertIsNone(plex.getTranscodeProfileExtra())
+
+		self.playFirstPart(plex)
+		headers = self.mock.requests_for(self.M3U8_PATH)[-1]["headers"]
+		self.assertNotIn("x-plex-client-profile-extra", headers)
+
+	def test_hevc_option_asks_the_server_for_hevc(self):
+		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
+						helpers.fixture("start.m3u8"))
+		plex = self.newPlex(playbackType="1", transcodeVideoCodec="hevc")
+		self.playFirstPart(plex)
+
+		headers = self.mock.requests_for(self.M3U8_PATH)[-1]["headers"]
+		profile = headers.get("x-plex-client-profile-extra")
+		self.assertTrue(profile, "the HEVC directive must travel with the request")
+		self.assertIn("videoCodec=hevc", profile)
+		# without protocol= the PMS drops the directive and silently encodes
+		# h264, so this is the part that actually makes it work
+		self.assertIn("protocol=hls", profile)
+		self.assertIn("type=videoProfile", profile)
+		self.assertEqual(headers.get("x-plex-client-profile-name"), "generic")
+
 	def test_fallback_to_master_playlist_when_no_media_urls(self):
 		self.mock.add_raw(self.M3U8_PATH, "application/vnd.apple.mpegurl",
 						helpers.fixture("start_comments_only.m3u8"))
