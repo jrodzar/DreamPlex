@@ -267,37 +267,32 @@
     <!-- title -->
     <widget source="Title" render="Label" transparent="1" zPosition="4" valign="center" position="3,8" size="235,42" font="OpenSans; 30" foregroundColor="grey" backgroundColor="background" halign="center" />
     <!-- menu -->
-    <widget source="menu" render="Listbox" position="10,232" size="1,0" zPosition="0">
+    <widget source="menu" render="Listbox" position="950,130" size="950,880" zPosition="12" scrollbarMode="showOnDemand" transparent="1" enableWrapAround="1" foregroundColor="foreground" foregroundColorSelected="foreground" backgroundColor="background" selectionPixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/images/focus_list.png">
       <convert type="TemplatedMultiContent">
-				{"template": [ MultiContentEntryText(pos = (10, 14), size = (390, 40), flags = RT_HALIGN_CENTER, text = 0) ], "fonts": [gFont("OpenSans", 35)], "itemHeight": 50 }
-			</convert>
+        {"template": [ MultiContentEntryText(pos = (40, 0), size = (878, 55), flags = RT_HALIGN_LEFT|RT_VALIGN_CENTER, text = 0) ], "fonts": [gFont("OpenSans", 32)], "itemHeight": 55 }
+      </convert>
     </widget>
     <!-- menu bar -->
-    <ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/images/main_menu-fs8.png" position="0,580" zPosition="-1" size="1920,350" alphatest="blend" transparent="1" />
+    <ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/images/main_menu-fs8.png" position="0,915" zPosition="-1" size="1920,350" alphatest="blend" transparent="1" />
     <!-- moving targets -->
-    <widget name="-2" transparent="1" zPosition="8" position="10,680" size="380,150" font="OpenSans; 34" halign="center" valign="center" foregroundColor="foreground" backgroundColor="background" />
-    <widget name="-1" transparent="1" zPosition="8" position="390,680" size="380,150" font="OpenSans; 34" halign="center" valign="center" foregroundColor="foreground" backgroundColor="background" />
-    <widget name="0" transparent="1" zPosition="8" position="770,680" size="380,150" font="OpenSans; 34" halign="center" valign="center" foregroundColor="foreground" backgroundColor="background" />
-    <widget name="+1" transparent="1" zPosition="8" position="1150,680" size="380,150" font="OpenSans; 34" halign="center" valign="center" foregroundColor="foreground" backgroundColor="background" />
-    <widget name="+2" transparent="1" zPosition="8" position="1530,680" size="380,150" font="OpenSans; 34" halign="center" valign="center" foregroundColor="foreground" backgroundColor="background" />
     <!-- picons -->
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_movies.png" zPosition="10" position="1250,150" size="350,350" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_movies.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">movieEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_shows.png" zPosition="10" position="1250,150" size="350,350" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_shows.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">showEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_music.png" zPosition="10" position="1250,150" size="350,350" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_music.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">musicEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="1250,150" size="350,350" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">mixedEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="1250,150" size="350,350" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">serverFilter</convert>
       <convert type="ConditionalShowHide" />
     </widget>
