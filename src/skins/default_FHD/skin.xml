@@ -276,23 +276,23 @@
     <ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/images/main_menu-fs8.png" position="0,915" zPosition="-1" size="1920,350" alphatest="blend" transparent="1" />
     <!-- moving targets -->
     <!-- picons -->
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_movies.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_movies.png" zPosition="10" position="272,650" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">movieEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_shows.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_shows.png" zPosition="10" position="272,650" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">showEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_music.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/menu_music.png" zPosition="10" position="272,650" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">musicEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="272,650" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">mixedEntry</convert>
       <convert type="ConditionalShowHide" />
     </widget>
-    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="272,620" size="384,384" alphatest="blend">
+    <widget source="menu" render="Pixmap" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/DreamPlex/skins/default_FHD/picons/dreamplex.png" zPosition="10" position="272,650" size="384,384" alphatest="blend">
       <convert type="MenuEntryCompare">serverFilter</convert>
       <convert type="ConditionalShowHide" />
     </widget>
