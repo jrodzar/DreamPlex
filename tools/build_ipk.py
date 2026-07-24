@@ -312,8 +312,9 @@ def build_control_members(version):
 def main(argv=None):
 	parser = argparse.ArgumentParser(description="build the DreamPlex ipk")
 	parser.add_argument("--outdir", default=os.path.join(REPO_ROOT, "dist"))
-	parser.add_argument("--version-suffix", default="+pms" + time.strftime("%Y%m%d"),
-					help="appended to the plugin version (default: +pmsYYYYMMDD)")
+	parser.add_argument("--version-suffix", default="",
+					help="appended to the plugin version (empty by default; "
+						"e.g. --version-suffix +pms20260722 to tag a build)")
 	args = parser.parse_args(argv)
 
 	version = read_plugin_version() + args.version_suffix
