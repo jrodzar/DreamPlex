@@ -97,6 +97,67 @@ class TestWakeOnLanDoesNotBlock(unittest.TestCase):
 				"reference to it while its callback may be on the stack")
 
 
+class TestTheMessageDoesNotPromiseASpinner(unittest.TestCase):
+	"""There is no spinner on this path, and the delay must leave the msgid.
+
+	Wrapping a concatenation in _() builds the msgid with the number already
+	in it, so it never matches the catalogue and the message always came out
+	in English - the same mistake as the "All Pel·lis" filter label.
+	"""
+
+	def test_no_spinner_is_promised(self):
+		source = readSource(MAINMENU).decode("utf-8")
+
+		self.assertNotIn("spinner will run", source)
+
+	def test_the_delay_is_interpolated_outside_the_translation(self):
+		source = readSource(MAINMENU).decode("utf-8")
+
+		self.assertIn("for the server to start up", source)
+		self.assertNotIn('seconds. \\nAccording to your settings.") ', source)
+		# the number goes in with %, not by building the msgid
+		self.assertIn(') % self.g_woldelay', source)
+
+
+class TestDiscoveryDoesNotBlock(unittest.TestCase):
+	"""The LAN search is an ActionMap callback: it runs on the main loop."""
+
+	SERVER = os.path.join(SRC, "DP_Server.py")
+
+	def _function(self, name):
+		tree = ast.parse(readSource(self.SERVER), filename=self.SERVER)
+		for node in ast.walk(tree):
+			if isinstance(node, ast.FunctionDef) and node.name == name:
+				return node
+
+		raise AssertionError("%s() not found in DP_Server.py" % name)
+
+	def test_no_sleep_loop_waiting_for_the_search(self):
+		keyBlue = self._function("keyBlue")
+
+		self.assertNotIn("sleep", calledNames(keyBlue),
+				"keyBlue() runs on the main loop: sleeping here freezes the GUI "
+				"until the search answers, and for ever if it never does")
+
+		loops = [n for n in ast.walk(keyBlue) if isinstance(n, (ast.While, ast.For))]
+		self.assertEqual(loops, [], "the wait belongs to a timer, not to a loop")
+
+	def test_the_search_is_capped(self):
+		source = readSource(self.SERVER).decode("utf-8")
+
+		self.assertIn("GDM_MAX_ATTEMPTS", source,
+				"a silent GDM must not leave the timer polling for ever")
+
+	def test_the_timer_is_imported_and_stopped(self):
+		source = readSource(self.SERVER).decode("utf-8")
+		self.assertIn("from enigma import eTimer", source)
+
+		check = self._function("checkDiscovery")
+		stops = [n for n in ast.walk(check)
+				if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "stop"]
+		self.assertTrue(stops, "checkDiscovery() must stop the timer when done")
+
+
 class TestTheDelayIsAsLongAsDocumented(unittest.TestCase):
 	"""Guards the reasoning above: this is a minute, not a moment."""
 

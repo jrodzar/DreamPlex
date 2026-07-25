@@ -26,6 +26,8 @@ You should have received a copy of the GNU General Public License
 #=================================
 import time
 
+from enigma import eTimer
+
 from Components.ActionMap import ActionMap
 from Components.ConfigList import ConfigListScreen
 from Components.Sources.StaticText import StaticText
@@ -56,7 +58,16 @@ from .DPH_Singleton import Singleton
 #===============================================================================
 
 
+# how many one-second polls to wait for the GDM search before giving up, so a
+# silent network cannot leave the timer running for ever
+GDM_MAX_ATTEMPTS = 10
+
+
 class DPS_Server(Screen, DPH_PlexScreen):
+
+	gdmTimer = None
+	gdmClient = None
+	gdmAttempts = 0
 
 	def __init__(self, session, what=None):
 		printl("", self, "S")
@@ -256,19 +267,58 @@ class DPS_Server(Screen, DPH_PlexScreen):
 	#
 	#===========================================================================
 	def keyBlue(self):
+		"""Discover servers on the LAN without freezing the GUI.
+
+		This is an ActionMap callback, so it runs on the enigma2 main loop.
+		It used to sit in a `while not discovery_complete: sleep(1)` loop,
+		which blocks everything until the answer arrives - and forever if it
+		never does. The wait is now a timer, with a cap so a silent GDM
+		cannot leave it spinning.
+		"""
 		printl("", self, "S")
 
-		client = PlexGdm()
-		client.setClientDetails()
+		self.gdmClient = PlexGdm()
+		self.gdmClient.setClientDetails()
+		self.gdmClient.start_discovery()
 
-		client.start_discovery()
-		while not client.discovery_complete:
-			print("Waiting for results")
-			time.sleep(1)
+		self.gdmAttempts = 0
 
-		client.stop_discovery()
-		serverList = client.getServerList()
+		# reuse the timer object rather than replacing a live one
+		if self.gdmTimer is None:
+			self.gdmTimer = eTimer()
+			self.gdmTimer.callback.append(self.checkDiscovery)
+
+		self.gdmTimer.start(1000, False)
+
+		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def checkDiscovery(self):
+		printl("", self, "S")
+
+		self.gdmAttempts += 1
+
+		if not self.gdmClient.discovery_complete and self.gdmAttempts < GDM_MAX_ATTEMPTS:
+			printl("waiting for results (%s/%s)" % (self.gdmAttempts, GDM_MAX_ATTEMPTS), self, "D")
+			printl("", self, "C")
+			return
+
+		if self.gdmTimer is not None:
+			self.gdmTimer.stop()
+
+		timedOut = not self.gdmClient.discovery_complete
+		self.gdmClient.stop_discovery()
+
+		serverList = self.gdmClient.getServerList()
 		printl("serverList: " + str(serverList), self, "D")
+
+		if timedOut and not serverList:
+			printl("discovery timed out with nothing found", self, "W")
+			self.session.open(MessageBox, _("No server answered the search."), MessageBox.TYPE_INFO, timeout=5)
+			printl("", self, "C")
+			return
 
 		menu = []
 		for server in serverList:
