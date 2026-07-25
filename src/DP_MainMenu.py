@@ -471,7 +471,13 @@ class DPS_MainMenu(DPH_Screen, DPH_HorizontalMenu, DPH_ScreenHelper):
 	def showWakeMessage(self):
 		printl("", self, "S")
 
-		self.session.openWithCallback(self.executeWakeOnLan, MessageBox, _("Plexserver seems to be offline. Start with Wake on Lan settings? \n\nPlease note: \nIf you press yes the spinner will run for " + str(self.g_woldelay) + " seconds. \nAccording to your settings."), MessageBox.TYPE_YESNO)
+		# the delay has to stay OUT of _(): building the msgid by concatenation
+		# put the number inside it, so it never matched the catalogue and this
+		# message always came out in English. And it no longer promises a
+		# spinner - there is none on this path.
+		message = _("Plexserver seems to be offline. Start with Wake on Lan settings?\n\nPlease note:\nIf you press yes it will wait %s seconds for the server to start up, according to your settings.") % self.g_woldelay
+
+		self.session.openWithCallback(self.executeWakeOnLan, MessageBox, message, MessageBox.TYPE_YESNO)
 
 		printl("", self, "C")
 

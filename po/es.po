@@ -593,11 +593,12 @@ msgstr "Sobre"
 
 #: /hdd/workspaces/DreamPlex/src/DP_MainMenu.py:457
 msgid ""
-"Plexserver seems to be offline. Start with Wake on Lan settings? \n"
+"Plexserver seems to be offline. Start with Wake on Lan settings?\n"
 "\n"
-"Please note: \n"
-"If you press yes the spinner will run for "
-msgstr "El servidor Plex parece estar fuera de línea. ¿Iniciar con los ajustes de Wake on Lan?\n\nNota:\nSi pulsa Sí, el indicador girará durante "
+"Please note:\n"
+"If you press yes it will wait %s seconds for the server to start up, "
+"according to your settings."
+msgstr "El servidor Plex parece estar fuera de línea. ¿Iniciar con los ajustes de Wake on Lan?\n\nNota:\nSi pulsa Sí, se esperarán %s segundos a que el servidor arranque, según su configuración."
 
 #: /hdd/workspaces/DreamPlex/src/DP_MainMenu.py:467
 msgid ""
