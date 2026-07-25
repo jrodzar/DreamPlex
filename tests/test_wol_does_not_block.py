@@ -14,6 +14,7 @@ Found while chasing the DreamFin report about the blue button; the scale
 """
 
 import ast
+import re
 import io
 import os
 import unittest
@@ -117,6 +118,60 @@ class TestTheMessageDoesNotPromiseASpinner(unittest.TestCase):
 		self.assertNotIn('seconds. \\nAccording to your settings.") ', source)
 		# the number goes in with %, not by building the msgid
 		self.assertIn(') % self.g_woldelay', source)
+
+
+class TestTheMessageActuallyReachesTheCatalogue(unittest.TestCase):
+	"""The msgid the code asks for at runtime must exist in the catalogue.
+
+	This is the check that would have caught the original bug: the string
+	was translated in several languages and none of them ever showed,
+	because the msgid was built by concatenation and carried the number.
+	"""
+
+	PO = os.path.join(os.path.dirname(SRC), "po")
+
+	def runtimeMsgid(self):
+		source = readSource(MAINMENU).decode("utf-8")
+		match = re.search(r'message = _\("(.*?)"\) % self\.g_woldelay', source, re.S)
+		self.assertIsNotNone(match, "the Wake on Lan message changed shape")
+
+		return match.group(1).encode().decode("unicode_escape")
+
+	def catalogueMsgids(self, path):
+		msgids, current, inside = [], None, False
+		for line in io.open(path, encoding="utf-8"):
+			stripped = line.strip()
+			if stripped.startswith("msgid "):
+				if current is not None:
+					msgids.append(current)
+				current, inside = stripped[6:].strip('"'), True
+			elif stripped.startswith("msgstr"):
+				if current is not None:
+					msgids.append(current)
+					current = None
+				inside = False
+			elif inside and current is not None and stripped.startswith('"'):
+				current += stripped.strip('"')
+
+		if current is not None:
+			msgids.append(current)
+
+		return [m.encode().decode("unicode_escape") for m in msgids]
+
+	def test_the_spanish_catalogue_can_translate_it(self):
+		wanted = self.runtimeMsgid()
+		msgids = self.catalogueMsgids(os.path.join(self.PO, "es.po"))
+
+		self.assertIn(wanted, msgids,
+				"the msgid asked for at runtime is not in es.po, so the "
+				"message will never be translated")
+
+	def test_the_delay_is_a_placeholder_not_part_of_the_msgid(self):
+		wanted = self.runtimeMsgid()
+
+		self.assertIn("%s", wanted,
+				"the number must be a placeholder; baking it into the msgid "
+				"is what made this string untranslatable")
 
 
 class TestDiscoveryDoesNotBlock(unittest.TestCase):
