@@ -139,5 +139,40 @@ class TestSeekToMinute(unittest.TestCase):
 		self.assertIn("doSeek", calls)
 
 
+class TestResumeSurvivesAFailingGetLength(unittest.TestCase):
+	"""A failing getLength() must not take the resume down with it.
+
+	`length` was only assigned inside `if not r[0]:` but read further down in
+	a log line, so when getLength() failed that read raised NameError, the
+	function's own `except` swallowed it, and the resume was silently lost.
+	Reported by the DreamFin fork, which carries the same code.
+	"""
+
+	def test_length_is_initialised_before_getLength(self):
+		startPos = findFunction("seekToStartPos")
+
+		assigned = []
+		for node in ast.walk(startPos):
+			if isinstance(node, ast.Assign):
+				for target in node.targets:
+					if isinstance(target, ast.Name):
+						assigned.append(target.id)
+
+		self.assertGreaterEqual(assigned.count("length"), 2,
+				"length must have a default before the conditional assignment, "
+				"otherwise a failing getLength() raises NameError and the "
+				"resume is lost")
+
+	def test_log_line_does_not_print_the_time_function(self):
+		handle = io.open(PLAYER, "rb")
+		try:
+			source = handle.read().decode("utf-8")
+		finally:
+			handle.close()
+
+		# `time` is the imported function: this logged "<built-in function time>"
+		self.assertNotIn('"seeking to " + str(time)', source)
+
+
 if __name__ == "__main__":
 	unittest.main()

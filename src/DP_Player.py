@@ -1259,6 +1259,13 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 				seek = service and service.seek()
 				if seek is not None:
 
+					# only assigned when getLength() succeeds, and it is used
+					# further down in a log line - without this default a
+					# failing getLength() raised NameError there, the except
+					# below swallowed it, and the resume was lost with nothing
+					# but a warning (found by the DreamFin fork, same code)
+					length = None
+
 					r = seek.getLength()
 					if not r[0]:
 						printl("got duration", self, "D")
@@ -1286,7 +1293,9 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 						return
 
 					elapsed = self.resumeStamp * 90000
-					printl("seeking to " + str(time) + " length " + str(length) + " ", self, "D")
+					# `time` here used to be the imported time function, so the
+					# log read "seeking to <built-in function time>"
+					printl("seeking to " + str(self.resumeStamp) + "s length " + str(length) + " ", self, "D")
 
 					#mh //if elapsed < 90000:
 					#mh //	printl("skip seeking < 10s", self, "D")
