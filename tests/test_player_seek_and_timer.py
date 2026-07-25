@@ -168,6 +168,39 @@ class TestSeekWatcherDoesNotBlockTheMainLoop(unittest.TestCase):
 
 		self.assertIn("seekToStartPos", calledNames(watcher))
 
+	def test_the_watcher_timer_is_never_replaced_while_alive(self):
+		"""evUpdatedInfo fires repeatedly; building a new eTimer each time
+		drops the last reference to one whose callback may be on the stack."""
+		# the method is name-mangled: _DP_Player__evUpdatedInfo
+		updated = None
+		for node in ast.walk(parseTree()):
+			if isinstance(node, ast.FunctionDef) and node.name.endswith("__evUpdatedInfo"):
+				updated = node
+				break
+
+		self.assertIsNotNone(updated, "__evUpdatedInfo() not found")
+
+		# The eTimer() call must sit behind a guard on the watcher ITSELF.
+		# Checking merely for "None" in the condition is not enough: the
+		# outer `if ... resumeStamp is not None ...` would match and the
+		# test would pass against the unguarded code.
+		guarded = False
+		for node in ast.walk(updated):
+			if not isinstance(node, ast.If):
+				continue
+
+			condition = ast.dump(node.test)
+			if "seekwatcherThread" not in condition or "None" not in condition:
+				continue
+
+			if any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+					and c.func.id == "eTimer" for c in ast.walk(node)):
+				guarded = True
+
+		self.assertTrue(guarded,
+				"__evUpdatedInfo() must only build the watcher when there is "
+				"none yet, never replace a live one")
+
 	def test_the_timer_is_stopped_when_leaving_the_player(self):
 		leave = findFunction("leavePlayerConfirmed")
 

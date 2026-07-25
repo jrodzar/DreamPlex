@@ -286,9 +286,19 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 	def __evUpdatedInfo(self):
 		if self.resume and self.resumeStamp is not None and self.resumeStamp > 0.0:
-			self.mhSeekHack = 0
-			self.seekwatcherThread = eTimer()
-			self.seekwatcherThread.callback.append(self.seekWatcher)
+			# evUpdatedInfo fires again and again while a resume is pending,
+			# and this used to build a NEW eTimer every time. Replacing a live
+			# one drops the last Python reference to a timer whose callback
+			# may be on the stack - enigma2 dispatches service events
+			# synchronously from C++ - which is the shape of a use-after-free.
+			# Keep the one object for the life of the player and just (re)arm
+			# it: the next entry of a playlist needs it again. (Spotted by
+			# DreamFin while chasing a native crash.)
+			if self.seekwatcherThread is None:
+				self.seekwatcherThread = eTimer()
+				self.seekwatcherThread.callback.append(self.seekWatcher)
+				self.mhSeekHack = 0
+
 			self.seekwatcherThread.start(900, False)
 			return
 
