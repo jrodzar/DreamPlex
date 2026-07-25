@@ -139,6 +139,43 @@ class TestSeekToMinute(unittest.TestCase):
 		self.assertIn("doSeek", calls)
 
 
+class TestSeekWatcherDoesNotBlockTheMainLoop(unittest.TestCase):
+	"""The resume watcher runs on the enigma2 main loop, not on a thread.
+
+	Despite being called `seekwatcherThread` it is an eTimer, so its callback
+	runs on the main loop. It used to hold a `while` loop with a sleep(1) in
+	it, which froze the GUI for the whole resume - dropped key presses - and
+	never ended at all when the decoder had no position to report.
+	"""
+
+	def test_no_sleep_on_the_main_loop(self):
+		watcher = findFunction("seekWatcher")
+
+		self.assertNotIn("sleep", calledNames(watcher),
+				"seekWatcher() runs on the main loop: a sleep() here freezes "
+				"the whole GUI")
+
+	def test_no_loop_waiting_for_the_resume(self):
+		watcher = findFunction("seekWatcher")
+
+		loops = [n for n in ast.walk(watcher) if isinstance(n, (ast.While, ast.For))]
+		self.assertEqual(loops, [],
+				"the eTimer already repeats; looping here blocks the main loop "
+				"until the resume completes, or forever if it never does")
+
+	def test_it_still_attempts_the_seek(self):
+		watcher = findFunction("seekWatcher")
+
+		self.assertIn("seekToStartPos", calledNames(watcher))
+
+	def test_the_timer_is_stopped_when_leaving_the_player(self):
+		leave = findFunction("leavePlayerConfirmed")
+
+		self.assertTrue(callsMethodOn(leave, "seekwatcherThread", "stop"),
+				"nothing else stops the resume watcher, so it would keep "
+				"firing after the player is gone")
+
+
 class TestResumeSurvivesAFailingGetLength(unittest.TestCase):
 	"""A failing getLength() must not take the resume down with it.
 
