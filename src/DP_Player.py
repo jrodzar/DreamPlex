@@ -160,6 +160,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	playSessionID = None
 	playbackClock = None
 	timelineWatcher = None
+	seekwatcherThread = None
 	whatPoster = None
 	subtitleStreams = None
 	subtitleLanguageCode = None
@@ -1227,17 +1228,35 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	#===========================================================================
 	#noinspection PyUnusedLocal
 	def seekWatcher(self, *args):
+		"""One attempt at the resume seek. Repeated by the eTimer, not here.
+
+		This runs on the enigma2 MAIN LOOP: despite its name the watcher is
+		an eTimer, not a thread. It used to hold a `while` loop with a
+		sleep(1) in it, which froze the whole GUI for as long as the resume
+		took - key presses were simply dropped, and if the decoder never
+		reported a position (which is what happens on transcoded HLS on some
+		images) resumeStamp was never cleared and the loop never ended, so
+		the GUI stayed frozen until the image's hang detector killed enigma2.
+		The timer already repeats every 900ms, so one attempt per call is
+		all that was ever needed.
+		"""
 		printl("", self, "S")
 
-		printl("seekWatcher started", self, "I")
+		if self.resumeStamp is None:
+			# nothing left to do: stop repeating
+			if self.seekwatcherThread is not None:
+				self.seekwatcherThread.stop()
+			printl("seekWatcher finished", self, "I")
+			printl("", self, "C")
+			return
+
 		try:
-			while self is not None and self.resumeStamp is not None:
-				self.seekToStartPos()
-				sleep(1)
+			self.seekToStartPos()
 		except Exception as e:
 			printl("stopping due to exception in seektostartpos, eg. stopped playback before ready ..." + str(e), self, "W")
+			if self.seekwatcherThread is not None:
+				self.seekwatcherThread.stop()
 
-		printl("seekWatcher finished ", self, "I")
 		printl("", self, "C")
 
 	#===========================================================================
@@ -1358,6 +1377,11 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	#===========================================================================
 	def leavePlayerConfirmed(self, answer):
 		printl("", self, "S")
+
+		# the resume watcher must not outlive the player: it keeps firing on
+		# the main loop while resumeStamp is set, and nothing else stops it
+		if self.seekwatcherThread is not None:
+			self.seekwatcherThread.stop()
 
 		if answer != "EOF":
 			self.handleProgress()
