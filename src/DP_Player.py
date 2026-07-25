@@ -72,6 +72,10 @@ from .__init__ import _  # _ is translation
 SUBTITLES_ENABLED = False
 SUBTITLES_CONTENT = None
 
+# how often playback progress is reported to the server. It used to be
+# repeated in four places that could disagree; keep it in one.
+TIMELINE_INTERVAL_MS = 5000
+
 
 #===============================================================================
 #
@@ -304,7 +308,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		self.startTimelineWatcher()
 
 		if self.timelineWatcher is not None:
-			self.timelineWatcher.start(5000, False)
+			self.timelineWatcher.start(TIMELINE_INTERVAL_MS, False)
 
 		printl("", self, "C")
 
@@ -753,7 +757,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 
 			if self.timelineWatcher is not None:
 				# we start here too because it seems that direct local does not hit the buffer full function
-				self.timelineWatcher.start(5000, False)
+				self.timelineWatcher.start(TIMELINE_INTERVAL_MS, False)
 
 			if self.subtitleWatcher is not None:
 				self.subtitleWatcher.start(10000, False)
@@ -977,8 +981,18 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		self.playbackClock.start(startAt)
 
 		# the timer only fires after its interval, so the server would not
-		# hear about this playback for another 5 seconds: report at once
+		# hear about this playback for another interval: report at once
 		self.updateTimeline()
+
+		# and start it right here. It used to be started from four other
+		# places instead, and none of them won for streamed/transcoded
+		# playback: resumePlayerData() started a timer that play() then
+		# threw away by calling this method again (play() only started it
+		# again for direct local), and the bufferFull event that would
+		# have covered it never arrives on HLS. The result on hardware was
+		# zero updateTimeline() calls for a whole playback - no progress
+		# reported and the PlaybackClock left inert.
+		self.timelineWatcher.start(TIMELINE_INTERVAL_MS, False)
 
 		printl("", self, "C")
 
@@ -1025,7 +1039,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			# same 5s as everywhere else: at 30s the dashboard kept showing
 			# the stream paused long after it had been resumed
 			self.updateTimeline()
-			self.timelineWatcher.start(5000, False)
+			self.timelineWatcher.start(TIMELINE_INTERVAL_MS, False)
 
 		printl("", self, "S")
 	#===========================================================================
@@ -1298,7 +1312,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 			self.setSeekState(self.SEEK_STATE_PLAY)
 
 		if self.timelineWatcher is not None:
-			self.timelineWatcher.start(5000, False)
+			self.timelineWatcher.start(TIMELINE_INTERVAL_MS, False)
 
 		#printl("", self, "C")
 
@@ -1843,8 +1857,32 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 	def seekToMinute(self, minutes):
 		printl("", self, "S")
 
-		self.resumeStamp = int(minutes) * 60
-		self.seekToStartPos()
+		# the dialog can be cancelled, which answers None
+		if minutes is None:
+			printl("minute input cancelled", self, "D")
+			printl("", self, "C")
+			return
+
+		try:
+			seconds = max(0, int(minutes) * 60)
+		except (TypeError, ValueError):
+			printl("not a usable minute: " + str(minutes), self, "W")
+			printl("", self, "C")
+			return
+
+		# never past the end of the media
+		totalTime = self.getMediaDuration()
+		if totalTime > 0 and seconds > totalTime:
+			printl("clamping %s to the end of the media (%s)" % (seconds, totalTime), self, "D")
+			seconds = totalTime
+
+		# jump straight away instead of going through seekToStartPos(): that
+		# one refuses to seek until the decoder reports where it is, and on
+		# transcoded HLS it never does, so the jump was dropped in silence -
+		# the minute dialog worked and nothing happened. seekToStartPos()
+		# stays as it is: its retry logic is right for resuming AT START.
+		printl("seeking to minute " + str(minutes) + " (" + str(seconds) + "s)", self, "I")
+		self.doSeek(seconds * 90000)
 
 		printl("", self, "C")
 
