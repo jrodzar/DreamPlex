@@ -818,11 +818,11 @@ msgstr "Resumir 'Off'"
 
 #: /hdd/workspaces/DreamPlex/src/DP_View.py:860
 msgid "fastScroll 'On'"
-msgstr "fastScroll 'On'"
+msgstr "FastScroll 'Sí'"
 
 #: /hdd/workspaces/DreamPlex/src/DP_View.py:862
 msgid "fastScroll 'Off'"
-msgstr "fastScroll 'Off'"
+msgstr "FastScroll 'No'"
 
 #: /hdd/workspaces/DreamPlex/src/DP_View.py:945
 msgid "turn filter mode off"
