@@ -521,20 +521,20 @@ msgid ""
 msgstr "¡Error!\nMensaje de error: %s\nPulse Exit para cerrar."
 
 #: /hdd/workspaces/DreamPlex/src/DP_Syncer.py:1059
-msgid "title: "
-msgstr "Título:"
+msgid "title: %s"
+msgstr "Título: %s"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Syncer.py:1078
-msgid "found backdrop - size("
-msgstr "Encontrado Fondo de pantalla - tamaño("
+msgid "found backdrop - size(%sx%s)"
+msgstr "Fondo de pantalla encontrado - tamaño (%sx%s)"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Syncer.py:1084
 msgid "backdrop not found, trying to download ..."
 msgstr "No encontrado Fondo de pantalla, intentando descargar ..."
 
 #: /hdd/workspaces/DreamPlex/src/DP_Syncer.py:1104
-msgid "found poster - size("
-msgstr "Poster encontrado- tamaño("
+msgid "found poster - size(%sx%s)"
+msgstr "Póster encontrado - tamaño (%sx%s)"
 
 #: /hdd/workspaces/DreamPlex/src/DP_Syncer.py:1110
 msgid "poster not found, trying to download ..."
@@ -780,8 +780,8 @@ msgstr ""
 "Pulse sobre Exit para retornar."
 
 #: /hdd/workspaces/DreamPlex/src/DP_View.py:751
-msgid "playback mode '"
-msgstr "Modo de Reproducción '"
+msgid "playback mode '%s'"
+msgstr "Modo de reproducción '%s'"
 
 #: /hdd/workspaces/DreamPlex/src/DP_View.py:753
 msgid "View '"
