@@ -815,10 +815,15 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 					number = str(x[1])
 					description = "?"
 					myLanguage = _("<unknown>")
+					# the label above is translated, so it cannot also serve as the
+					# sentinel further down: in Spanish it reads "<desconocido>" and
+					# any comparison against "<unknown>" silently stops matching.
+					languageIsUnknown = True
 					selected = ""
 
 					if x[4] != "und":
 						foundDefined = True  # mh
+						languageIsUnknown = False
 
 						if x[4] in LanguageCodes:
 							myLanguage = LanguageCodes[x[4]][0]
@@ -854,7 +859,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 						forceMatch = False
 						if self.plexInstance.getServerConfig().useForcedSubtitles.value:
 							if foundDefined == False:
-								if myLanguage == "<unknown>":
+								if languageIsUnknown:
 									if description == "UTF-8 text":
 										try:
 											if self.playerData[self.currentIndex]['usingExtForcedSubs'] == True:

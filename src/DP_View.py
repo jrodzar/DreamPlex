@@ -1120,12 +1120,12 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		if self.fastScroll:
 			self.fastScroll = False
-			self["btn_" + color + "Text"].setText("fastScroll 'Off'")
+			self["btn_" + color + "Text"].setText(_("fastScroll 'Off'"))
 			self["info"].hide()
 			self["infoLabel"].hide()
 		else:
 			self.fastScroll = True
-			self["btn_" + color + "Text"].setText("fastScroll 'On'")
+			self["btn_" + color + "Text"].setText(_("fastScroll 'On'"))
 			self["info"].show()
 			self["infoLabel"].show()
 			self["miniTv"].hide()
