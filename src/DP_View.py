@@ -844,7 +844,12 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		self.setColorFunction(color="red", level="1", functionList=("", self.togglePlayMode))
 		self.setColorFunction(color="green", level="1", functionList=("", self.toggleResumeMode))
 		self.setColorFunction(color="yellow", level="1", functionList=("", self.executeLibraryFunction))  # name is empty because we set it dynamical
-		self.setColorFunction(color="blue", level="1", functionList=(_("playback mode '" + self.playbackModes[self.configuredPlaybackMode][1] + "'"), self.togglePlaybackMode))
+		# the mode name has to stay OUT of the msgid: concatenating it in built
+		# a key like "playback mode 'Transcoded'" that no catalogue can hold,
+		# so the label showed an English wrapper around a translated value -
+		# "playback mode 'Transcodificado'". A label in two languages at once
+		# is the signature of this bug. (Found by the DreamFin fork.)
+		self.setColorFunction(color="blue", level="1", functionList=(_("playback mode '%s'") % self.playbackModes[self.configuredPlaybackMode][1], self.togglePlaybackMode))
 
 		self.setColorFunction(color="red", level="2", functionList=(_("View '") + str(self.currentViewName) + " '", self.onToggleView))
 		self.setColorFunction(color="green", level="2", functionList=("", self.toggleFastScroll))  # name is empty because we set it dynamical
@@ -1156,7 +1161,8 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		self.playbackMode = self.nextPlaybackMode
 
-		self["btn_" + color + "Text"].setText("playback mode '" + myName + "'")
+		# this one was not even marked for translation
+		self["btn_" + color + "Text"].setText(_("playback mode '%s'") % myName)
 
 		printl("", self, "C")
 
@@ -2228,8 +2234,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		pageTotal = int(math.ceil((itemsTotal / itemsPerPage) + correctionVal))
 		pageCurrent = int(math.ceil((self["listview"].getIndex() / itemsPerPage) + 0.5))
 
-		self["total"].setText(_(str(itemsTotal)))
-		self["pagination"].setText(_(str(pageCurrent) + "/" + str(pageTotal)))
+		# numbers are not translatable: these asked gettext for "9" and "1/9"
+		self["total"].setText(str(itemsTotal))
+		self["pagination"].setText("%s/%s" % (pageCurrent, pageTotal))
 
 		printl("", self, "C")
 

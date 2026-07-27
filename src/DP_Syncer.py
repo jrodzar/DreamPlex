@@ -754,7 +754,7 @@ class BackgroundMediaSyncer(Thread):
 			from PIL import Image
 		except Exception as e:
 			printl("Error: " + str(e), self, "D")
-			self.messages.push((THREAD_WORKING, _("Error!\nError-message:%s" % e)))
+			self.messages.push((THREAD_WORKING, _("Error!\nError-message:%s") % e))
 			self.messagePump.send(0)
 			return
 
@@ -872,7 +872,7 @@ class BackgroundMediaSyncer(Thread):
 
 				except Exception as e:
 					printl("Error: " + str(e), self, "D")
-					self.messages.push((THREAD_WORKING, _("Error!\nError-message:%s" % e)))
+					self.messages.push((THREAD_WORKING, _("Error!\nError-message:%s") % e))
 					self.messagePump.send(0)
 		else:
 			msg_text = _("\n\nNo Files found. Nothing to do!")
@@ -1009,7 +1009,7 @@ class BackgroundMediaSyncer(Thread):
 				self.messages.push((THREAD_FINISHED, _("We did it :-)")))
 
 		except Exception as e:
-			self.messages.push((THREAD_FINISHED, _("Error!\nError-message:%s\nPress Exit to close." % e)))
+			self.messages.push((THREAD_FINISHED, _("Error!\nError-message:%s\nPress Exit to close.") % e))
 		finally:
 			self.messagePump.send(0)
 
@@ -1132,7 +1132,7 @@ class BackgroundMediaSyncer(Thread):
 			msg_text = "\n" + str(myType) + " with ratingKey: " + str(media[1]["ratingKey"])
 			self.messages.push((THREAD_WORKING, msg_text))
 			self.messagePump.send(0)
-			msg_text = _("title: " + encodeThat(media[1]["title"]))
+			msg_text = _("title: %s") % encodeThat(media[1]["title"])
 			self.messages.push((THREAD_WORKING, msg_text))
 			self.messagePump.send(0)
 
@@ -1151,7 +1151,7 @@ class BackgroundMediaSyncer(Thread):
 
 				# check if backdrop exists
 				if fileExists(location):
-					msg_text = _("found backdrop - size(" + str(t_width) + "x" + str(t_height) + ")")
+					msg_text = _("found backdrop - size(%sx%s)") % (t_width, t_height)
 					self.messages.push((THREAD_WORKING, msg_text))
 					self.messagePump.send(0)
 					continue
@@ -1177,7 +1177,7 @@ class BackgroundMediaSyncer(Thread):
 
 				# check if poster exists
 				if fileExists(location):
-					msg_text = _("found poster - size(" + str(t_width) + "x" + str(t_height) + ")")
+					msg_text = _("found poster - size(%sx%s)") % (t_width, t_height)
 					self.messages.push((THREAD_WORKING, msg_text))
 					self.messagePump.send(0)
 					continue
