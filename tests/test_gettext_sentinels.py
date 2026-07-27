@@ -40,12 +40,21 @@ CONSTANT_NODE = getattr(ast, "Constant", ())
 
 # Literals that legitimately appear both marked and compared. Each one is a
 # value that arrives from outside already in English, or a key stored as data.
+#
+# Write the real reason next to every entry, and check it against the code
+# before adding one. An exception added to silence a report is the one that
+# hides the next bug: the DreamFin fork's sweep DID flag their "<unknown>"
+# and it was whitelisted as "a fallback value, not screen text" - which
+# sounded right and was wrong. The plausible label is the danger.
 ALLOWED = set([
 	"By Folder",   # mediaContainer["title2"], straight from the Plex API
 	"Season",      # media type from the API
 	"Music",       # media type from the API
 	"LiveTv",      # menu key stored beside its own translated label
-	" ",           # a separator, not a message
+	" ",           # NOT a shared string: the comparison is against
+	               # onNumberKeyLastChar, a character typed on the remote, and
+	               # the marked one is a config-list help text that happens to
+	               # be a single space. They collide by coincidence.
 ])
 
 
