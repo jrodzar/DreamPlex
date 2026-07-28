@@ -126,14 +126,16 @@ class TestTheSweepStillSeesTheCode(unittest.TestCase):
 		_bare, marked, _empty = self._sweep()
 
 		self.assertGreaterEqual(len(marked), 5,
-				"the sweep found almost no marked labels - it has most likely "
-				"stopped matching setColorFunction rather than found a clean tree")
+				"the sweep collected %d marked labels, so it has most likely "
+				"stopped matching setColorFunction rather than found a clean tree"
+				% len(marked))
 
 	def test_it_still_finds_labels_left_empty_on_purpose(self):
 		_bare, _marked, empty = self._sweep()
 
 		self.assertGreaterEqual(len(empty), 5,
-				"the sweep found almost no dynamic labels - same suspicion")
+				"the sweep collected %d dynamic labels - same suspicion"
+				% len(empty))
 
 
 class TestTheDetectorWorks(unittest.TestCase):

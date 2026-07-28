@@ -43,8 +43,12 @@ def isStringLiteral(node):
 	return bool(STR_NODE and isinstance(node, STR_NODE))
 
 
-def brokenMsgids(path):
-	"""(line, why) for every _() whose msgid is built at runtime."""
+def inspectMsgids(path):
+	"""((line, why) for every runtime-built msgid, how many _() calls were seen).
+
+	The second number matters as much as the first: a walk that stops matching
+	_() reports no offenders and looks exactly like a clean tree.
+	"""
 	handle = io.open(path, "rb")
 	try:
 		tree = ast.parse(handle.read(), filename=path)
@@ -52,12 +56,14 @@ def brokenMsgids(path):
 		handle.close()
 
 	broken = []
+	inspected = 0
 	for node in ast.walk(tree):
 		if not isinstance(node, ast.Call):
 			continue
 		if getattr(node.func, "id", None) != "_" or not node.args:
 			continue
 
+		inspected += 1
 		argument = node.args[0]
 		if isStringLiteral(argument):
 			continue  # the good case
@@ -70,20 +76,59 @@ def brokenMsgids(path):
 		if any(isStringLiteral(child) for child in ast.walk(argument)):
 			broken.append((node.lineno, "literal joined to a value"))
 
-	return broken
+	return broken, inspected
+
+
+def brokenMsgids(path):
+	"""(line, why) for every _() whose msgid is built at runtime."""
+	return inspectMsgids(path)[0]
+
+
+def sweepSource():
+	"""(offenders, how many _() calls the walk actually looked at)."""
+	offenders = []
+	inspected = 0
+	for path in sorted(glob.glob(os.path.join(SRC, "*.py"))):
+		broken, seen = inspectMsgids(path)
+		inspected += seen
+		for line, why in broken:
+			offenders.append("%s:%s (%s)" % (os.path.basename(path), line, why))
+
+	return offenders, inspected
 
 
 class TestMsgidsAreLiterals(unittest.TestCase):
 	def test_no_msgid_is_built_at_runtime(self):
-		offenders = []
-		for path in sorted(glob.glob(os.path.join(SRC, "*.py"))):
-			for line, why in brokenMsgids(path):
-				offenders.append("%s:%s (%s)" % (os.path.basename(path), line, why))
+		offenders, inspected = sweepSource()
 
 		self.assertEqual(offenders, [],
 				"these msgids are assembled at runtime, so no catalogue entry "
-				"can ever match them - pass the value with %% instead:\n  "
+				"can ever match them - pass the value with %% instead "
+				"(%d _() calls inspected):\n  " % inspected
 				+ "\n  ".join(offenders))
+
+
+class TestTheSweepStillSeesTheCode(unittest.TestCase):
+	"""Report how much was looked at, not just what was found.
+
+	If the walk ever stops matching _() - the helper renamed, imported under
+	another name, called as a method - this file reports no offenders and goes
+	green while inspecting nothing at all. That passes for the wrong reason and
+	looks identical to passing for the right one.
+
+	Idea from the DreamFin fork, including the part that makes it useful: put
+	the count in the message, so "no problems" can be told apart from "did not
+	look". It is the same rule we keep repeating for ourselves - print where
+	the number came from, not just the number - applied to the guard itself.
+	"""
+
+	def test_it_still_finds_calls_to_inspect(self):
+		_offenders, inspected = sweepSource()
+
+		self.assertGreater(inspected, 100,
+				"only %d _() calls were inspected across src/, which means the "
+				"walk has most likely stopped matching them rather than that "
+				"the tree is clean" % inspected)
 
 
 class TestTheDetectorWorks(unittest.TestCase):

@@ -109,6 +109,20 @@ def parseSource():
 	return trees
 
 
+def countComparedLiterals(trees):
+	"""How many literals sit in a comparison at all, allowed or not."""
+	total = 0
+	for _path, tree in trees:
+		for node in ast.walk(tree):
+			if not isinstance(node, ast.Compare):
+				continue
+			for side in [node.left] + list(node.comparators):
+				if literalOf(side) is not None:
+					total += 1
+
+	return total
+
+
 class TestNoTranslatedSentinels(unittest.TestCase):
 	def test_no_comparison_against_a_translated_literal(self):
 		trees = parseSource()
@@ -122,8 +136,40 @@ class TestNoTranslatedSentinels(unittest.TestCase):
 
 		self.assertEqual(sorted(set(offenders)), [],
 				"these comparisons break as soon as the string is translated, so "
-				"they fail in every language except English:\n  "
+				"they fail in every language except English (%d marked strings "
+				"and %d compared literals seen):\n  "
+				% (len(marked), countComparedLiterals(trees))
 				+ "\n  ".join(sorted(set(offenders))))
+
+
+class TestTheSweepStillSeesTheCode(unittest.TestCase):
+	"""This guard needs BOTH halves of its walk to keep working.
+
+	It compares two collections - strings marked with _(), and literals used as
+	comparison operands - and reports where they overlap. If either half stops
+	matching, the overlap is empty, no offender is reported and the test goes
+	green having checked nothing. Neither failure has a symptom of its own.
+
+	Idea from the DreamFin fork, along with putting the counts in the message
+	so "no problems" can be told apart from "did not look".
+	"""
+
+	def test_it_still_collects_marked_strings(self):
+		trees = parseSource()
+		marked = markedLiterals(trees)
+
+		self.assertGreater(len(marked), 100,
+				"the walk collected %d marked strings, so it has most likely "
+				"stopped matching _() rather than found a tree with none"
+				% len(marked))
+
+	def test_it_still_collects_compared_literals(self):
+		trees = parseSource()
+
+		self.assertGreater(countComparedLiterals(trees), 100,
+				"the walk collected %d compared literals, so it has most likely "
+				"stopped matching comparisons rather than found a tree with none"
+				% countComparedLiterals(trees))
 
 
 class TestTheDetectorWorks(unittest.TestCase):
