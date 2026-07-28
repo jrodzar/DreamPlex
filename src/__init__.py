@@ -507,11 +507,45 @@ def getViewsByType(myType):
 #===============================================================================
 
 
+# Our catalogue is bound in localeInit(), which runs from prepareEnvironment()
+# - and enigma2 calls Plugins() to read the plugin list BEFORE any of that.
+# Anything translated at registration time therefore asked gettext for a domain
+# that was not bound yet and got the msgid straight back, which is why the
+# plugin browser showed its description in English however good the catalogue
+# was. Bind on first use instead of relying on the order of startup.
+_localeBindTried = False
+
+
+def bindOwnCatalogue():
+	"""Point gettext at our .mo files, once, whenever _() is first needed.
+
+	Everything this needs is already loaded and proven at that moment: the
+	module-level code above resolves SCOPE_PLUGINS the same way while enigma2
+	is reading the plugin list. If it fails anyway the except leaves things
+	exactly as they were before - dgettext returns the msgid - and localeInit()
+	still binds the domain properly later on.
+	"""
+	global _localeBindTried
+
+	if _localeBindTried:
+		return
+
+	_localeBindTried = True  # set first: never retry on every single lookup
+
+	try:
+		gettext.bindtextdomain("DreamPlex", "%s%s" % (resolveFilename(SCOPE_PLUGINS), "Extensions/DreamPlex/locale/"))
+	except Exception as e:
+		print("[DreamPlex] could not bind the translation catalogue: %s" % str(e))
+
+
 def _(txt):
 	#printl("", "__init__::_(txt)", "S")
 
 	if len(txt) == 0:
 		return ""
+
+	bindOwnCatalogue()
+
 	text = gettext.dgettext("DreamPlex", txt)
 	if text == txt:
 		text = gettext.gettext(txt)
