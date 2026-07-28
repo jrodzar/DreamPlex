@@ -863,11 +863,11 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 		self.setColorFunction(color="red", level="2", functionList=(_("View '") + str(self.currentViewName) + " '", self.onToggleView))
 		self.setColorFunction(color="green", level="2", functionList=("", self.toggleFastScroll))  # name is empty because we set it dynamical
-		self.setColorFunction(color="yellow", level="2", functionList=("refresh Library", self.initiateRefresh))
+		self.setColorFunction(color="yellow", level="2", functionList=(_("refresh Library"), self.initiateRefresh))
 		self.setColorFunction(color="blue", level="2", functionList=(_("show 'Details'"), self.toggleDetails))
 
-		self.setColorFunction(color="red", level="3", functionList=("Server Settings", self.showServerSettings))
-		self.setColorFunction(color="green", level="3", functionList=("Plex Settings", self.showGeneralSettings))
+		self.setColorFunction(color="red", level="3", functionList=(_("Server Settings"), self.showServerSettings))
+		self.setColorFunction(color="green", level="3", functionList=(_("Plex Settings"), self.showGeneralSettings))
 		self.setColorFunction(color="yellow", level="3", functionList=(_("delete Medias"), self.deleteMedias))
 		self.setColorFunction(color="blue", level="3", functionList=(_("use for Mapping"), self.useForMappingHelper))
 
