@@ -1819,3 +1819,15 @@ msgstr "Token X-Plex para autenticarse en este servidor. Prevalece sobre la aute
 
 msgid "Subtitle Functions\n\nPlease take note that switching the subtitles here will take only effect if you use direct local or transcoding!"
 msgstr "Funciones de Subtítulos\n\n¡Recuerde que cambiar los subtítulos aquí solo tiene efecto con local directo o transcodificación!"
+
+#: /hdd/workspaces/DreamPlex/src/DP_View.py:866
+msgid "refresh Library"
+msgstr "Actualizar Biblioteca"
+
+#: /hdd/workspaces/DreamPlex/src/DP_View.py:869
+msgid "Server Settings"
+msgstr "Ajustes del Servidor"
+
+#: /hdd/workspaces/DreamPlex/src/DP_View.py:870
+msgid "Plex Settings"
+msgstr "Ajustes de Plex"
