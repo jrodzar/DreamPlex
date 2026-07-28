@@ -50,15 +50,15 @@ def isMarked(node):
 	return False
 
 
-def bareLabels(path):
-	"""(line, text) for every setColorFunction label that skips _()."""
+def classifyLabels(path):
+	"""(bare, marked, empty) for every setColorFunction label in a file."""
 	handle = io.open(path, "rb")
 	try:
 		tree = ast.parse(handle.read(), filename=path)
 	finally:
 		handle.close()
 
-	found = []
+	bare, marked, empty = [], [], []
 	for node in ast.walk(tree):
 		if not isinstance(node, ast.Call):
 			continue
@@ -74,12 +74,18 @@ def bareLabels(path):
 			label = keyword.value.elts[0]
 			text = literalOf(label)
 			if text == "":
-				continue  # set later from code, on purpose
+				empty.append((node.lineno, text))  # set later from code, on purpose
+			elif isMarked(label):
+				marked.append((node.lineno, text))
+			else:
+				bare.append((node.lineno, text))
 
-			if not isMarked(label):
-				found.append((node.lineno, text))
+	return bare, marked, empty
 
-	return found
+
+def bareLabels(path):
+	"""(line, text) for every setColorFunction label that skips _()."""
+	return classifyLabels(path)[0]
 
 
 class TestColourButtonLabels(unittest.TestCase):
@@ -92,6 +98,42 @@ class TestColourButtonLabels(unittest.TestCase):
 		self.assertEqual(offenders, [],
 				"these go under a colour button and never reach the catalogue:\n  "
 				+ "\n  ".join(offenders))
+
+
+class TestTheSweepStillSeesTheCode(unittest.TestCase):
+	"""A guard that stops looking passes for the wrong reason.
+
+	If setColorFunction is ever renamed, or the label stops being the first
+	element of the functionList tuple, the walk above matches nothing and the
+	test above goes green while checking exactly zero labels - and nobody
+	notices, because a passing test looks the same either way. So require the
+	sweep to keep finding the shapes we know are there.
+
+	Idea from the DreamFin fork, who added it to their copy of this guard.
+	"""
+
+	def _sweep(self):
+		bare, marked, empty = [], [], []
+		for path in sorted(glob.glob(os.path.join(SRC, "*.py"))):
+			b, m, e = classifyLabels(path)
+			bare += b
+			marked += m
+			empty += e
+
+		return bare, marked, empty
+
+	def test_it_still_finds_labels_that_are_marked(self):
+		_bare, marked, _empty = self._sweep()
+
+		self.assertGreaterEqual(len(marked), 5,
+				"the sweep found almost no marked labels - it has most likely "
+				"stopped matching setColorFunction rather than found a clean tree")
+
+	def test_it_still_finds_labels_left_empty_on_purpose(self):
+		_bare, _marked, empty = self._sweep()
+
+		self.assertGreaterEqual(len(empty), 5,
+				"the sweep found almost no dynamic labels - same suspicion")
 
 
 class TestTheDetectorWorks(unittest.TestCase):
