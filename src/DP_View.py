@@ -1659,8 +1659,16 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 				self.session.nav.stopService()
 
 		if self.viewStep >= 0:
-			self["listview"].setList(self.currentEntryDataDict[self.viewStep])
+			restoredList = self.currentEntryDataDict[self.viewStep]
+			self["listview"].setList(restoredList)
 			self["listview"].setIndex(self.currentIndexDict[self.viewStep])
+
+			# The widget list and the list we hand to the player must stay in sync:
+			# onEnter() indexes self.listViewList with the widget's index, so a
+			# level left without restoring it plays the wrong item - or raises
+			# IndexError and takes enigma2 down with it.
+			self.listViewList = restoredList
+			self.beforeFilterListViewList = restoredList
 
 			if self.filterMode:
 				self.toggleFilterMode(quit=True)
