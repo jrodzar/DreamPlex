@@ -1297,7 +1297,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		"""
 		printl("", self, "S")
 
-		if self.listViewList is not self.beforeFilterListViewList:
+		if self.beforeFilterListViewList is not None and self.listViewList is not self.beforeFilterListViewList:
 			current = self["listview"].getCurrent()
 
 			self.listViewList = self.beforeFilterListViewList
