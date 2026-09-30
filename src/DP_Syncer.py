@@ -43,14 +43,25 @@ from Components.ScrollLabel import ScrollLabel
 from Components.Pixmap import Pixmap
 
 
-# URLopener was removed in Python 3.14 (deprecated since 3.3) and both of the
-# old fallbacks pointed at the same removed symbol, so importing it took the
-# whole plugin - and, being an Autostart plugin, enigma2 itself - down on
-# OpenATV 8.0. Use the modern API, which exists on py2.7 as urllib2 too.
 try:
-	from urllib.request import urlopen, Request
+	from urllib.request import URLopener
 except ImportError:
-	from urllib2 import urlopen, Request
+	try:
+		from urllib import URLopener
+	except ImportError:
+		from urllib.request import Request, urlopen
+
+		class URLopener:
+			def __init__(self):
+				self.addheaders = []
+
+			def addheader(self, name, value):
+				self.addheaders.append((name, value))
+
+			def retrieve(self, url, filename):
+				request = Request(url, headers=dict(self.addheaders))
+				with urlopen(request) as response, open(filename, "wb") as out_file:
+					out_file.write(response.read())
 
 from Screens.Screen import Screen
 
@@ -599,7 +610,7 @@ g_mediaSyncerInfo = MediaSyncerInfo()
 
 class BackgroundMediaSyncer(Thread):
 
-	downloadHeaders = None
+	urllibInstance = None
 
 	def __init__(self):
 		Thread.__init__(self)
@@ -1236,13 +1247,13 @@ class BackgroundMediaSyncer(Thread):
 		download_url = download_url.replace('&width=999&height=999', '&width=' + width + '&height=' + height)
 		printl("download url " + download_url, self, "D")
 
-		if self.downloadHeaders is None:
+		if self.urllibInstance is None:
 			server = self.plexInstance.getServerFromURL(download_url)
-			self.initDownloadHeaders(server)
+			self.initUrllibInstance(server)
 
 		printl("starting download", self, "D")
 		try:
-			self.retrieveToFile(download_url, location)
+			self.urllibInstance.retrieve(download_url, location)
 
 			msg_text = _("... success")
 			self.messages.push((THREAD_WORKING, msg_text))
@@ -1260,12 +1271,11 @@ class BackgroundMediaSyncer(Thread):
 	#===========================================================================
 	#
 	#===========================================================================
-	def initDownloadHeaders(self, server):
+	def initUrllibInstance(self, server):
 		printl("", self, "S")
 
-		# we work out the headers once here (empty dict = none needed, but not
-		# None, so this only runs once)
-		self.downloadHeaders = {}
+		# we establish the connection once here
+		self.urllibInstance = URLopener()
 
 		# we add headers only in special cases
 		connectionType = self.serverConfig.connectionType.value
@@ -1273,27 +1283,7 @@ class BackgroundMediaSyncer(Thread):
 
 		if connectionType == "2" or localAuth:
 			authHeader = self.plexInstance.get_hTokenForServer(server)
-			if authHeader:
-				self.downloadHeaders["X-Plex-Token"] = authHeader["X-Plex-Token"]
-
-		printl("", self, "C")
-
-	#===========================================================================
-	#
-	#===========================================================================
-	def retrieveToFile(self, download_url, location):
-		"""Download a URL to a file, carrying the server token when needed.
-
-		Replaces URLopener.retrieve(), which no longer exists on Python 3.14.
-		"""
-		printl("", self, "S")
-
-		response = urlopen(Request(download_url, headers=self.downloadHeaders or {}))
-		try:
-			with open(location, "wb") as target:
-				target.write(response.read())
-		finally:
-			response.close()
+			self.urllibInstance.addheader("X-Plex-Token", authHeader["X-Plex-Token"])
 
 		printl("", self, "C")
 
