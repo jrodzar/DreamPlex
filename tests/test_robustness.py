@@ -2,6 +2,7 @@
 """Robustness tests: manual access token precedence, HTTP redirect
 following, container pagination and modern-PMS attribute guards."""
 
+import threading
 import unittest
 
 try:
@@ -270,24 +271,100 @@ class TestTrailerExtras(RobustnessTestCase):
 		self.assertEqual(options, [])
 
 
+class QueueingReactor(object):
+	"""Stands in for the twisted reactor: keeps what the worker hands over
+	instead of running it, so the test decides when - and on which thread -
+	the callback runs, as the real main loop would."""
+
+	def __init__(self):
+		self.handedOver = threading.Event()
+		self.pending = []
+
+	def callFromThread(self, fn, *args, **kwargs):
+		self.pending.append((fn, args, kwargs))
+		self.handedOver.set()
+
+	def runPending(self):
+		for fn, args, kwargs in self.pending:
+			fn(*args, **kwargs)
+
+
 class TestRunInThread(unittest.TestCase):
 	"""Network I/O must be delivered back through a callback so it can run
-	off the enigma2 main loop (a long block there kills enigma2)."""
+	off the enigma2 main loop (a long block there kills enigma2).
 
-	def test_result_is_delivered(self):
-		from src.__common__ import runInThread
+	runInThread() has two branches and every test here pins the one it means.
+	These tests used to run whichever branch sys.path happened to select: they
+	were written against the synchronous one, and when tests/stubs gained a
+	twisted stub for an unrelated fix they silently moved to the threaded one -
+	where they read the result without waiting for the worker, and failed now
+	and then on Python 2 (about 3 calls in 1,000)."""
+
+	def setUp(self):
+		import src.__common__ as common
+		self.common = common
+		self.addCleanup(setattr, common, "reactor", common.reactor)
+
+	def runThreaded(self, work):
+		"""Run work through the threaded branch; return what was seen."""
+		reactor = QueueingReactor()
+		self.common.reactor = reactor
 		seen = {}
+
+		def recordingWork():
+			seen["workThread"] = threading.current_thread()
+			return work()
 
 		def onDone(result, error):
 			seen["result"], seen["error"] = result, error
 
-		runInThread(lambda: 21 * 2, onDone)
+		self.common.runInThread(recordingWork, onDone)  # must not raise
+
+		# wait for the hand-over itself, never for a fixed time
+		self.assertTrue(reactor.handedOver.wait(10),
+				"the worker never handed its result to the reactor")
+		self.assertNotIn("result", seen,
+				"onDone ran on the worker thread instead of going through the reactor")
+		reactor.runPending()
+
+		return seen
+
+	def test_the_work_runs_off_the_callers_thread(self):
+		seen = self.runThreaded(lambda: 21 * 2)
+
+		self.assertIsNot(seen["workThread"], threading.current_thread(),
+				"the work ran on the caller's thread, so runInThread blocked it")
+
+	def test_result_is_delivered_through_the_reactor(self):
+		seen = self.runThreaded(lambda: 21 * 2)
 
 		self.assertEqual(seen["result"], 42)
 		self.assertIsNone(seen["error"])
 
 	def test_exception_is_delivered_not_raised(self):
-		from src.__common__ import runInThread
+		def work():
+			raise IOError("boom")
+
+		seen = self.runThreaded(work)
+
+		self.assertIsNone(seen["result"])
+		self.assertIsInstance(seen["error"], IOError)
+
+	def test_without_a_reactor_the_result_is_delivered_before_returning(self):
+		self.common.reactor = None
+		seen = {}
+
+		def onDone(result, error):
+			seen["result"], seen["error"] = result, error
+
+		self.common.runInThread(lambda: 21 * 2, onDone)
+
+		# no waiting on purpose: this branch is synchronous by design
+		self.assertEqual(seen["result"], 42)
+		self.assertIsNone(seen["error"])
+
+	def test_without_a_reactor_an_exception_is_delivered_not_raised(self):
+		self.common.reactor = None
 		seen = {}
 
 		def work():
@@ -296,7 +373,7 @@ class TestRunInThread(unittest.TestCase):
 		def onDone(result, error):
 			seen["result"], seen["error"] = result, error
 
-		runInThread(work, onDone)  # must not raise
+		self.common.runInThread(work, onDone)  # must not raise
 
 		self.assertIsNone(seen["result"])
 		self.assertIsInstance(seen["error"], IOError)
