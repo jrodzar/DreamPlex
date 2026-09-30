@@ -709,9 +709,11 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			plexInstance = Singleton().getPlexInstance()
 			url = "%s://%s/library/metadata/%s" % (plexInstance.http, entryData["server"], entryData["ratingKey"])
 
-			# fetch off the main loop, then patch the row in the callback
+			# fetch off the main loop, then patch the row in the callback. The
+			# callback gets the row's dict, not its index: by the time the answer
+			# arrives a letter filter may have changed which row sits there.
 			runInThread(lambda: plexInstance.getMoviesFromSection(url),
-					lambda result, error: self.applyRefreshedViewState(index, result, error))
+					lambda result, error: self.applyRefreshedViewState(entryData, result, error))
 
 		except Exception as e:
 			printl("could not refresh entry view state: " + str(e), self, "W")
@@ -721,7 +723,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 	#===========================================================================
 	#
 	#===========================================================================
-	def applyRefreshedViewState(self, index, result, error):
+	def applyRefreshedViewState(self, entryData, result, error):
 		printl("", self, "S")
 
 		try:
@@ -735,8 +737,14 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 				printl("", self, "C")
 				return
 
-			entry = self.listViewList[index]
-			entryData = entry[1]
+			entry = self.findListEntry(entryData)
+			if entry is None:
+				# the level was left before the server answered: the row is not
+				# on this screen any more, and an index would land on whatever
+				# row sits there now
+				printl("", self, "C")
+				return
+
 			freshEntry = freshList[0]
 			freshData = freshEntry[1]
 
@@ -751,10 +759,17 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			icons = {"seen": self.seenPic, "started": self.startedPic, "unseen": self.unseenPic}
 			patched = list(entry)
 			patched[3] = icons.get(str(freshEntry[3]), self.unseenPic)
-			self.listViewList[index] = tuple(patched)
-			# modifyEntry does not repaint the row on every skin/listbox
-			# combination - rebuild the visual list like the initial load does
-			self.updateList(myIndex=index)
+			visibleIndex = self.replaceListEntry(entryData, tuple(patched))
+
+			if visibleIndex is not None:
+				# modifyEntry does not repaint the row on every skin/listbox
+				# combination - rebuild the visual list like the initial load does,
+				# leaving the cursor wherever the user has it now
+				self.updateList(myIndex=self["listview"].getIndex())
+
+				# the yellow button was worked out before this answer arrived
+				if self.selection is not None and self.selection[1].get("tagType") != "Directory":
+					self.handleViewStateInformation()
 
 			# the pickle cache of this section is stale now
 			self.forceUpdate = True
@@ -762,6 +777,57 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			printl("could not refresh entry view state: " + str(e), self, "W")
 
 		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def findListEntry(self, entryData):
+		"""The row of this level holding this very entryData dict, or None.
+
+		Looked up in the unfiltered list, which has every row of the level
+		whatever the letter filter shows. Matched by identity: indices differ
+		between the filtered and the unfiltered list, and an index captured
+		earlier may point at another row by now.
+		"""
+		for row in self.beforeFilterListViewList or []:
+			if row[1] is entryData:
+				return row
+
+		return None
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def replaceListEntry(self, entryData, newEntry):
+		"""Put newEntry in place of the row holding this very entryData dict,
+		in the list on screen AND in the unfiltered one.
+
+		With a letter filter active they are different lists - filter() builds
+		the one on screen out of beforeFilterListViewList - so replacing the
+		row in the visible list only left the unfiltered one with the old
+		tuple: clearing the filter brought the old watch icon back, while the
+		dict inside, shared by both rows, already said otherwise. Without a
+		filter both names point at the same list, patched once.
+
+		Returns the row's index in the list on screen, or None when the
+		filter hides it.
+		"""
+		lists = [self.listViewList]
+		if self.beforeFilterListViewList is not self.listViewList:
+			lists.append(self.beforeFilterListViewList)
+
+		visibleIndex = None
+		for rows in lists:
+			if rows is None:
+				continue
+			for index, row in enumerate(rows):
+				if row[1] is entryData:
+					rows[index] = newEntry
+					if rows is self.listViewList:
+						visibleIndex = index
+					break
+
+		return visibleIndex
 
 	#===========================================================================
 	#
@@ -861,7 +927,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		self.setColorFunction(color="yellow", level="3", functionList=(_("delete Medias"), self.deleteMedias))
 		self.setColorFunction(color="blue", level="3", functionList=(_("use for Mapping"), self.useForMappingHelper))
 
-		self.setColorFunction(color="red", level="4", functionList=("", self.toggleFilterMode))  # name is empty because we set it dynamical
+		self.setColorFunction(color="red", level="4", functionList=("", self.leaveFilterMode))  # name is empty because we set it dynamical
 		self.setColorFunction(color="green", level="4", functionList=None)
 		self.setColorFunction(color="yellow", level="4", functionList=None)
 		self.setColorFunction(color="blue", level="4", functionList=None)
@@ -1198,6 +1264,46 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 			self["L2"].show()
 			self["L3"].show()
+
+		printl("", self, "C")
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def leaveFilterMode(self):
+		"""The RED button of the filter mode: bring the whole list back with
+		the cursor on the same entry, then turn the mode off.
+
+		Leaving the mode used to keep the list filtered. Clearing the filter
+		needs a space typed on the number keys, and where the space sits
+		depends on each image's key map - on OpenATV 7.0 it is the second
+		press of 1 - so there was no obvious way back to the whole list.
+
+		Deliberately NOT part of toggleFilterMode(): onEnter() calls that on
+		every OK and reads the cursor right after, to pick what to play from
+		self.listViewList. Restoring the list in there would swap it between
+		choosing an entry and reading the cursor, and the player would get
+		another one - the family of the onLeave() bug fixed in v2.3.20.
+		"""
+		printl("", self, "S")
+
+		if self.listViewList is not self.beforeFilterListViewList:
+			current = self["listview"].getCurrent()
+
+			self.listViewList = self.beforeFilterListViewList
+			self["listview"].setList(self.listViewList)
+
+			index = 0
+			if current is not None:
+				for position, row in enumerate(self.listViewList):
+					if row[1] is current[1]:
+						index = position
+						break
+			self["listview"].setIndex(index)
+
+			self.refresh()
+
+		self.toggleFilterMode()
 
 		printl("", self, "C")
 
@@ -2403,7 +2509,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		myList = list(currentSelection)
 		myList[3] = self.unseenPic
 		myList[1]["viewCount"] = 0
-		self.listViewList[currentIndex] = tuple(myList)
+		# in the unfiltered list too, or clearing a letter filter brings
+		# the old icon back
+		self.replaceListEntry(myList[1], tuple(myList))
 		# modifyEntry does not repaint the row everywhere, rebuild the list
 		self.updateList(myIndex=currentIndex)
 
@@ -2429,7 +2537,9 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 		myList = list(currentSelection)
 		myList[3] = self.seenPic
 		myList[1]["viewCount"] = 1
-		self.listViewList[currentIndex] = tuple(myList)
+		# in the unfiltered list too, or clearing a letter filter brings
+		# the old icon back
+		self.replaceListEntry(myList[1], tuple(myList))
 		# modifyEntry does not repaint the row everywhere, rebuild the list
 		self.updateList(myIndex=currentIndex)
 
@@ -3326,8 +3436,14 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			# we also have to reset the variable because this one is passed to player
 			self.listViewList = self.beforeFilterListViewList
 		else:
-			self.listViewList = [x for x in self.beforeFilterListViewList if x[1]["title"][0] == self.onNumberKeyLastChar]
-			self["listview"].setList(self.listViewList)
+			# [:1], not [0]: an empty title would raise
+			matching = [x for x in self.beforeFilterListViewList if x[1]["title"][:1] == self.onNumberKeyLastChar]
+
+			# a letter no title starts with used to leave an empty list and "no
+			# data retrieved" on screen; keep the list that was there instead
+			if matching:
+				self.listViewList = matching
+				self["listview"].setList(self.listViewList)
 
 		self.refresh()
 
