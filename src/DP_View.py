@@ -3464,6 +3464,10 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 
 			# we also have to reset the variable because this one is passed to player
 			self.listViewList = self.beforeFilterListViewList
+			# a new list starts at the top: the receiver's listbox keeps the old
+			# index, cut down to the new length, which landed on an arbitrary row -
+			# the last one, once RED had left the cursor deep in the whole list
+			self["listview"].setIndex(0)
 		else:
 			# [:1], not [0]: an empty title would raise
 			matching = [x for x in self.beforeFilterListViewList if x[1]["title"][:1] == self.onNumberKeyLastChar]
@@ -3473,6 +3477,7 @@ class DP_View(DPH_Screen, DPH_ScreenHelper, DPH_MultiColorFunctions, DPH_Filter)
 			if matching:
 				self.listViewList = matching
 				self["listview"].setList(self.listViewList)
+				self["listview"].setIndex(0)
 
 		self.refresh()
 
