@@ -528,6 +528,10 @@ class DPH_Filter(NumericalTextInput):
 
 			# we also have to reset the variable because this one is passed to player
 			self.listViewList = self.beforeFilterListViewList
+			# a new list starts at the top: the receiver's listbox keeps the old
+			# index, cut down to the new length, which landed on an arbitrary row -
+			# the last one, once RED had left the cursor deep in the whole list
+			self["menu"].setIndex(0)
 		else:
 			# [:1], not [0]: an empty name would raise
 			matching = [x for x in self.beforeFilterListViewList if x[0][:1] == self.onNumberKeyLastChar]
@@ -537,6 +541,7 @@ class DPH_Filter(NumericalTextInput):
 			if matching:
 				self.listViewList = matching
 				self["menu"].setList(self.listViewList)
+				self["menu"].setIndex(0)
 
 		self.refreshMenu()
 

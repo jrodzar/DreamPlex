@@ -9,10 +9,14 @@ periphery the filter does not depend on is stubbed: images, skin levels,
 timers. refresh() keeps the one part that matters here - which entry is
 selected and the seen/unseen state derived from it.
 
-The stand-in listbox sends the cursor to the top whenever it gets a new list,
-as a real one may, so nothing can pass by leaning on a cursor that happened to
-survive a list swap. The handler of the RED button in filter mode is read from
-the setColorFunction(color="red", level="4") call in the source, which keeps
+Every case runs with two models of the listbox. One sends the cursor to the
+top on every new list, so nothing can pass by leaning on a cursor that
+happened to survive a list swap. The other does what the receiver really
+does - on OpenATV 7.0 a new list keeps the cursor's index, cut down to its
+length - so nothing can pass by leaning on a reset either. One model alone
+hides half: the resetting one hid that filtering again after RED landed on
+the last row. The handler of the RED button in filter mode is read from the
+setColorFunction(color="red", level="4") call in the source, which keeps
 this file valid before and after that button changes target.
 
 What is checked is what the user sees: which icon the whole list paints once
@@ -148,6 +152,16 @@ class _Listbox(object):
 		self.index = index
 
 
+class _ClampingListbox(_Listbox):
+	"""The listbox the receiver really has, as seen on OpenATV 7.0: a new
+	list keeps the cursor's index, cut down to the length of the new list.
+	"""
+
+	def setList(self, rows):
+		self.list = rows
+		self.index = min(self.index, max(len(rows) - 1, 0))
+
+
 class _Label(object):
 	def __init__(self):
 		self.text = ""
@@ -177,8 +191,8 @@ class FakeView(object):
 	seen = False
 	onNumberKeyLastChar = "#"
 
-	def __init__(self, rows):
-		self.widgets = {"listview": _Listbox()}
+	def __init__(self, rows, listbox=_Listbox):
+		self.widgets = {"listview": listbox()}
 		self.listViewList = rows
 		self.beforeFilterListViewList = rows
 		self["listview"].setList(rows)
@@ -224,8 +238,8 @@ class FakeMenu(object):
 
 	onNumberKeyLastChar = "#"
 
-	def __init__(self, rows):
-		self.widgets = {"menu": _Listbox()}
+	def __init__(self, rows, listbox=_Listbox):
+		self.widgets = {"menu": listbox()}
 		self.listViewList = rows
 		self.beforeFilterListViewList = rows
 		self["menu"].setList(rows)
@@ -266,11 +280,13 @@ def answer(state, viewCount):
 
 
 class LetterFilterTest(unittest.TestCase):
+	LISTBOX = _Listbox
+
 	def setUp(self):
 		del PENDING[:]
 
 	def view(self):
-		return FakeView(rows(LIBRARY))
+		return FakeView(rows(LIBRARY), self.LISTBOX)
 
 	def typeLetter(self, view, char):
 		view.onNumberKeyLastChar = char
@@ -446,14 +462,14 @@ class TestLettersThatMatchNothing(LetterFilterTest):
 		self.assertIs(view["listview"].list, before)
 
 	def test_an_empty_title_does_not_break_the_filter(self):
-		view = FakeView(rows([("", "0"), ("UFO Sweden", "0")]))
+		view = FakeView(rows([("", "0"), ("UFO Sweden", "0")]), self.LISTBOX)
 
 		self.typeLetter(view, "U")
 
 		self.assertEqual([row[0] for row in view.listViewList], ["UFO Sweden"])
 
 	def test_the_section_menu_keeps_its_list_too(self):
-		menu = FakeMenu([("Pel.lis",), ("Series",), ("Documentals",)])
+		menu = FakeMenu([("Pel.lis",), ("Series",), ("Documentals",)], self.LISTBOX)
 		before = menu.listViewList
 
 		menu.onNumberKeyLastChar = "0"
@@ -463,12 +479,59 @@ class TestLettersThatMatchNothing(LetterFilterTest):
 		self.assertIs(menu["menu"].list, before)
 
 	def test_an_empty_section_name_does_not_break_the_menu_filter(self):
-		menu = FakeMenu([("",), ("Series",)])
+		menu = FakeMenu([("",), ("Series",)], self.LISTBOX)
 
 		menu.onNumberKeyLastChar = "S"
 		menu.filter()
 
 		self.assertEqual([row[0] for row in menu.listViewList], ["Series"])
+
+
+class TestTheCursorAfterFiltering(LetterFilterTest):
+	"""A list filter() puts on screen starts at the top. Only the receiver's
+	listbox can tell: the resetting one puts the cursor there whatever the
+	code does."""
+
+	def test_a_new_letter_starts_at_the_top(self):
+		view = self.view()
+		self.select(view, "Zodiac")  # deep in the list
+		view.initFilterMode()
+		view.currentFunctionLevel = "4"
+
+		self.typeLetter(view, "U")
+
+		self.assertEqual(view["listview"].getIndex(), 0,
+				"the filtered list opened wherever the old index fell")
+
+	def test_filtering_again_after_red_starts_at_the_top(self):
+		# seen on the receiver: RED left the cursor deep in the whole list, and
+		# filtering again landed on the last row of the new one
+		view = self.filtered("U")
+		self.select(view, "Un altre home")
+		getattr(view, redHandlerInFilterMode())()
+
+		view.initFilterMode()
+		view.currentFunctionLevel = "4"
+		self.typeLetter(view, "U")
+
+		self.assertEqual(view["listview"].getIndex(), 0)
+
+	def test_showing_everything_again_starts_at_the_top(self):
+		view = self.filtered("U")
+		self.select(view, "Un altre home")
+
+		self.typeLetter(view, " ")
+
+		self.assertEqual(view["listview"].getIndex(), 0)
+
+	def test_the_section_menu_starts_at_the_top_too(self):
+		menu = FakeMenu([("Documentals",), ("Pel.lis",), ("Series",), ("Series infantils",)], self.LISTBOX)
+		menu["menu"].setIndex(3)
+
+		menu.onNumberKeyLastChar = "S"
+		menu.filter()
+
+		self.assertEqual(menu["menu"].getIndex(), 0)
 
 
 class TestEveryRowReplacementGoesThroughOnePlace(unittest.TestCase):
@@ -502,6 +565,31 @@ class TestEveryRowReplacementGoesThroughOnePlace(unittest.TestCase):
 				% (len(seen), "\n  ".join(direct)))
 		self.assertEqual(sorted(set(self.SITES) - calls), [],
 				"these no longer go through replaceListEntry()")
+
+
+class OnTheReceiversListbox(object):
+	"""The same cases, with the listbox the receiver really has."""
+	LISTBOX = _ClampingListbox
+
+
+class TestMarksSurviveClearingTheFilterOnTheReceiversListbox(OnTheReceiversListbox, TestMarksSurviveClearingTheFilter):
+	pass
+
+
+class TestTheRefreshAfterPlaybackOnTheReceiversListbox(OnTheReceiversListbox, TestTheRefreshAfterPlayback):
+	pass
+
+
+class TestLeavingTheFilterModeOnTheReceiversListbox(OnTheReceiversListbox, TestLeavingTheFilterMode):
+	pass
+
+
+class TestLettersThatMatchNothingOnTheReceiversListbox(OnTheReceiversListbox, TestLettersThatMatchNothing):
+	pass
+
+
+class TestTheCursorAfterFilteringOnTheReceiversListbox(OnTheReceiversListbox, TestTheCursorAfterFiltering):
+	pass
 
 
 if __name__ == "__main__":
