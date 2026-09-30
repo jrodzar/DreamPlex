@@ -1283,7 +1283,10 @@ class BackgroundMediaSyncer(Thread):
 
 		if connectionType == "2" or localAuth:
 			authHeader = self.plexInstance.get_hTokenForServer(server)
-			self.urllibInstance.addheader("X-Plex-Token", authHeader["X-Plex-Token"])
+			# None whenever the token is not cached; indexing it raised here,
+			# before downloadMedia()'s own try, and took the syncer thread down
+			if authHeader:
+				self.urllibInstance.addheader("X-Plex-Token", authHeader["X-Plex-Token"])
 
 		printl("", self, "C")
 

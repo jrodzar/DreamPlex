@@ -169,5 +169,19 @@ class TestSyncerDownload(unittest.TestCase):
 				"the second download has to reuse the prepared token")
 
 
+	def test_a_missing_token_does_not_crash_the_download(self):
+		# get_hTokenForServer() returns None whenever the token is not cached.
+		# Indexing that during the lazy set-up raised a TypeError BEFORE the
+		# download's own try, so it escaped downloadMedia() and took the
+		# syncer thread down instead of reporting anything.
+		self.mock.add_raw("/photo/poster.jpg", "image/jpeg", b"x")
+		syncer = self.newSyncer(connectionType="2", token=None)
+
+		syncer.downloadMedia(self.url("/photo/poster.jpg"), os.path.join(self.tmp, "p.jpg"), "100", "150")
+
+		self.assertEqual(len(self.mock.requests), 1, "the download never reached the server")
+		self.assertIsNone(self.lastRequestToken())
+
+
 if __name__ == "__main__":
 	unittest.main()
