@@ -298,7 +298,17 @@ class TestRunInThread(unittest.TestCase):
 	were written against the synchronous one, and when tests/stubs gained a
 	twisted stub for an unrelated fix they silently moved to the threaded one -
 	where they read the result without waiting for the worker, and failed now
-	and then on Python 2 (about 3 calls in 1,000)."""
+	and then on Python 2 (about 3 calls in 1,000).
+
+	Once the queue has run, the threaded tests also join the worker and want
+	exactly one delivery, on their own thread. Checking only that onDone had
+	not run before the hand-over let a worker through that handed over and
+	THEN ran onDone itself, off the main loop: caught only when the worker
+	happened to be quick, and never with a pause between the two. The join is
+	skipped when the work ran on the test's own thread: joining the current
+	thread raises, and would fail all three threaded tests with that instead
+	of just the one that exists to report it. Found and measured by the
+	DreamFin fork."""
 
 	def setUp(self):
 		import src.__common__ as common
@@ -309,13 +319,14 @@ class TestRunInThread(unittest.TestCase):
 		"""Run work through the threaded branch; return what was seen."""
 		reactor = QueueingReactor()
 		self.common.reactor = reactor
-		seen = {}
+		seen = {"onDoneThreads": []}
 
 		def recordingWork():
 			seen["workThread"] = threading.current_thread()
 			return work()
 
 		def onDone(result, error):
+			seen["onDoneThreads"].append(threading.current_thread())
 			seen["result"], seen["error"] = result, error
 
 		self.common.runInThread(recordingWork, onDone)  # must not raise
@@ -326,6 +337,14 @@ class TestRunInThread(unittest.TestCase):
 		self.assertNotIn("result", seen,
 				"onDone ran on the worker thread instead of going through the reactor")
 		reactor.runPending()
+
+		# the worker must be done, and must not have delivered a second time
+		worker = seen["workThread"]
+		if worker is not threading.current_thread():  # else: its own test says so
+			worker.join(10)
+			self.assertFalse(worker.is_alive(), "the worker thread never finished")
+		self.assertEqual(seen["onDoneThreads"], [threading.current_thread()],
+				"onDone must run exactly once, and on the main loop's thread")
 
 		return seen
 
