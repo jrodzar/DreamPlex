@@ -405,6 +405,20 @@ class TestLeavingTheFilterMode(LetterFilterTest):
 		expected = "set 'Unseen'" if view["listview"].getCurrent()[3] == SEEN else "set 'Seen'"
 		self.assertEqual(view["btn_yellowText"].text, expected)
 
+	def test_after_red_the_label_is_worked_out_again_not_left_over(self):
+		# leaveFilterMode() has to work seen/unseen out again for the entry
+		# under the cursor before the yellow button is painted. A cursor that
+		# stays on the same entry never tells a recomputed value from one left
+		# over, so start from a value left over from another entry.
+		view = self.filtered("U")
+		self.select(view, "UFO Sweden")
+		view.seen = True  # left over from some other entry
+
+		getattr(view, redHandlerInFilterMode())()
+
+		self.assertEqual(view["btn_yellowText"].text, "set 'Seen'",
+				"the yellow button was painted from a value left over from another entry")
+
 	def test_ok_under_a_filter_does_not_swap_the_list_under_the_cursor(self):
 		# onEnter() calls toggleFilterMode(quit=True) on every OK and reads the
 		# cursor AFTER it, to pick what to play from self.listViewList. If that
