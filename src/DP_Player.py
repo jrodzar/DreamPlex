@@ -91,7 +91,14 @@ class InfobarAudioSelectionExtended(InfoBarAudioSelection):
 	#===========================================================================
 	def audioSelection(self):
 		printl("mh: audioSelection", self, "D")
-		self.session.openWithCallback(self.audioSelected, myAudioSelection, infobar=self.session.infobar or self)
+		# our own callback: the image's audioSelected() is gone since OpenATV 7.6
+		self.session.openWithCallback(self.audioSelectionClosed, myAudioSelection, infobar=self.session.infobar or self)
+
+	#===========================================================================
+	#
+	#===========================================================================
+	def audioSelectionClosed(self, result=None):
+		printl("result: " + str(result), self, "D")
 
 #===============================================================================
 #
