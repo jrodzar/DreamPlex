@@ -55,6 +55,7 @@ VIDEO_BLOCK = bytearray([0x40 | 2, 0x10, 0x04])  # tag 2: two short video descri
 HDR_PQ_HLG = bytearray([0xE0 | 3, 0x06, 0x0D, 0x01])  # extended tag 6: SDR + PQ + HLG
 HDR_SDR_ONLY = bytearray([0xE0 | 3, 0x06, 0x01, 0x01])  # extended tag 6: SDR curve only
 DOLBY_VISION = bytearray([0xE0 | 8, 0x01, 0x46, 0xD0, 0x00, 0, 0, 0, 0])  # OUI 00-D0-46
+COLORIMETRY_BT2020 = bytearray([0xE0 | 3, 0x05, 0xC0, 0x00])  # extended tag 5: BT.2020 colours, which are not HDR
 
 
 class TestEdidTakesHdr(unittest.TestCase):
@@ -85,6 +86,10 @@ class TestEdidTakesHdr(unittest.TestCase):
 	def test_amlogic_hands_it_over_as_hex_text(self):
 		text = binascii.hexlify(_edid([[VIDEO_BLOCK, HDR_PQ_HLG]])) + b"\n"
 		self.assertTrue(edidTakesHdr(text))
+
+
+SF8008_VIDEO_MODES = ("pal ntsc 480i 480p 576i 576p 720p50 720p 720p24 1080i50 1080i 1080p50 1080p 1080p24 "
+		"2160p25 2160p30 2160p50 2160p 2160p24")  # its videomode_choices, as read on the box
 
 
 class TestBoxSupportsHdr(unittest.TestCase):
@@ -185,6 +190,37 @@ class TestBoxSupportsHdr(unittest.TestCase):
 		self.touch("/proc/stb/video/hdmi_hdrtype", "auto")
 		self.touch("/proc/stb/video/hdmi_hdrtype_choices", "auto sdr hdr10 hlg")
 		self.touch("/proc/stb/video/videomode_choices", "720p 1080i 1080p 2160p24 2160p25 2160p50 2160p")
+		self.assertTrue(boxSupportsHdr(self.root))
+
+	def the_sf8008_on_openatv_7_0(self, hdrType="auto"):
+		"""The Octagon SF8008 as read on the box (HiSilicon, OpenATV 7.0,
+		2026-10-05): hdmi_hdrtype without its choices, and no Broadcom or Amlogic
+		files, so only the last test of _boxCanOutputHdr says it can do HDR. The
+		monitors' EDIDs below have the structure measured on it, with made-up
+		bytes (the real ones carry the screen's model and serial number)."""
+		self.touch("/proc/stb/video/videomode_choices", SF8008_VIDEO_MODES)
+		self.touch("/proc/stb/video/hdmi_hdrtype", hdrType)
+
+	def test_the_sf8008_with_an_hdr_monitor(self):
+		self.the_sf8008_on_openatv_7_0()
+		self.touch("/proc/stb/hdmi/raw_edid", _edid([[VIDEO_BLOCK, HDR_PQ_HLG]]))
+		self.assertTrue(boxSupportsHdr(self.root))
+
+	def test_the_sf8008_with_a_monitor_without_hdr(self):
+		self.the_sf8008_on_openatv_7_0()
+		self.touch("/proc/stb/hdmi/raw_edid", _edid([[VIDEO_BLOCK, COLORIMETRY_BT2020]]))
+		self.assertFalse(boxSupportsHdr(self.root))
+
+	def test_the_sf8008_with_its_hdr_type_set_to_sdr(self):
+		self.the_sf8008_on_openatv_7_0(hdrType="none")
+		self.touch("/proc/stb/hdmi/raw_edid", _edid([[VIDEO_BLOCK, HDR_PQ_HLG]]))
+		self.assertFalse(boxSupportsHdr(self.root))
+
+	def test_the_sf8008_with_no_screen_to_read(self):
+		"""With no screen whose EDID is valid, raw_edid is there but reading it
+		fails: the TV cannot be told, so what the box can do stands."""
+		self.the_sf8008_on_openatv_7_0()
+		os.makedirs(self.root + "/proc/stb/hdmi/raw_edid")  # opening a directory fails like the driver does
 		self.assertTrue(boxSupportsHdr(self.root))
 
 
