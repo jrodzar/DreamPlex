@@ -10,10 +10,13 @@ entry. The version still travels by its own mediaIndex ([7]), never by its
 place in the list.
 
 boxSupportsHdr() and the ninth field of buildMediaChoiceName() are shared
-with the DreamFin fork (bb3e391) and ported as they are, with their tests.
+with the DreamFin fork (bb3e391, f278be2) and ported as they are, with their
+tests: whether the box can output HDR, whether the user turned it off, and
+whether the TV's EDID takes it.
 Reading the kind is Plex's own: the video stream's colorTrc and DOVIPresent.
 """
 
+import binascii
 import os
 import shutil
 import tempfile
@@ -27,12 +30,66 @@ except ImportError:  # direct invocation from the tests directory
 
 helpers.setup_environment()
 
-from src.__common__ import boxSupportsHdr, buildMediaChoiceName  # noqa: E402
+from src.__common__ import boxSupportsHdr, buildMediaChoiceName, edidTakesHdr  # noqa: E402
 import src.DP_PlexLibrary as plexlibrary  # noqa: E402
 
 
+def _edid(extensions=(), declared=None):
+	"""An EDID: the base block plus one CTA-861 extension per list of data
+	blocks. declared overrides the extension count the base block announces."""
+	data = bytearray(128)
+	data[0:8] = bytearray(b"\x00\xff\xff\xff\xff\xff\xff\x00")
+	data[126] = len(extensions) if declared is None else declared
+	for blocks in extensions:
+		payload = bytearray()
+		for block in blocks:
+			payload += block
+		extension = bytearray(128)
+		extension[0], extension[1], extension[2] = 0x02, 0x03, 4 + len(payload)
+		extension[4:4 + len(payload)] = payload
+		data += extension
+	return bytes(data)
+
+
+VIDEO_BLOCK = bytearray([0x40 | 2, 0x10, 0x04])  # tag 2: two short video descriptors
+HDR_PQ_HLG = bytearray([0xE0 | 3, 0x06, 0x0D, 0x01])  # extended tag 6: SDR + PQ + HLG
+HDR_SDR_ONLY = bytearray([0xE0 | 3, 0x06, 0x01, 0x01])  # extended tag 6: SDR curve only
+DOLBY_VISION = bytearray([0xE0 | 8, 0x01, 0x46, 0xD0, 0x00, 0, 0, 0, 0])  # OUI 00-D0-46
+
+
+class TestEdidTakesHdr(unittest.TestCase):
+	"""The CTA-861 blocks that say whether the TV takes HDR."""
+
+	def test_a_tv_announcing_pq_and_hlg(self):
+		self.assertTrue(edidTakesHdr(_edid([[VIDEO_BLOCK, HDR_PQ_HLG]])))
+
+	def test_a_tv_with_dolby_vision(self):
+		self.assertTrue(edidTakesHdr(_edid([[VIDEO_BLOCK, DOLBY_VISION]])))
+
+	def test_a_tv_with_no_hdr_block(self):
+		self.assertFalse(edidTakesHdr(_edid([[VIDEO_BLOCK]])))
+
+	def test_a_tv_whose_hdr_block_lists_only_the_sdr_curve(self):
+		self.assertFalse(edidTakesHdr(_edid([[VIDEO_BLOCK, HDR_SDR_ONLY]])))
+
+	def test_an_edid_without_extensions(self):
+		self.assertFalse(edidTakesHdr(_edid([])))
+
+	def test_a_cut_edid_cannot_tell(self):
+		self.assertIsNone(edidTakesHdr(_edid([], declared=1)))
+
+	def test_something_else_cannot_tell(self):
+		self.assertIsNone(edidTakesHdr(b"not an edid"))
+		self.assertIsNone(edidTakesHdr(b""))
+
+	def test_amlogic_hands_it_over_as_hex_text(self):
+		text = binascii.hexlify(_edid([[VIDEO_BLOCK, HDR_PQ_HLG]])) + b"\n"
+		self.assertTrue(edidTakesHdr(text))
+
+
 class TestBoxSupportsHdr(unittest.TestCase):
-	"""The same files OpenATV 7.0 and 8.0 look at (Components/AVSwitch)."""
+	"""The same files OpenATV 7.0 and 8.0 look at (Components/AVSwitch), the
+	settings the box obeys, and the TV's EDID."""
 
 	def setUp(self):
 		self.root = tempfile.mkdtemp()
@@ -42,8 +99,54 @@ class TestBoxSupportsHdr(unittest.TestCase):
 		full = self.root + path
 		if not os.path.isdir(os.path.dirname(full)):
 			os.makedirs(os.path.dirname(full))
-		with open(full, "w") as handle:
-			handle.write(content)
+		# always binary: py2 in text mode would turn an EDID's \n bytes into \r\n on Windows
+		data = content if isinstance(content, bytes) else content.encode("utf-8")
+		with open(full, "wb") as handle:
+			handle.write(data)
+
+	def a_4k_hisilicon_box(self, hdrType="auto"):
+		self.touch("/proc/stb/video/videomode_choices", "720p 1080i 1080p 2160p24 2160p25 2160p50 2160p")
+		self.touch("/proc/stb/video/hdmi_hdrtype", hdrType)
+		self.touch("/proc/stb/video/hdmi_hdrtype_choices", "none auto dolby hdr10 hlg")
+
+	def a_4k_broadcom_box(self, hlg="auto(EDID)", hdr10="auto(EDID)"):
+		self.touch("/proc/stb/video/videomode_choices", "720p 1080i 1080p 2160p30 2160p")
+		self.touch("/proc/stb/hdmi/hlg_support_choices", "auto(EDID) yes no")
+		self.touch("/proc/stb/hdmi/hlg_support", hlg)
+		self.touch("/proc/stb/hdmi/hdr10_support", hdr10)
+
+	def test_the_user_set_the_hisilicon_hdr_type_to_sdr(self):
+		self.a_4k_hisilicon_box(hdrType="none")
+		self.assertFalse(boxSupportsHdr(self.root))
+
+	def test_the_user_turned_off_both_broadcom_hdr_kinds(self):
+		self.a_4k_broadcom_box(hlg="no", hdr10="no")
+		self.assertFalse(boxSupportsHdr(self.root))
+
+	def test_one_broadcom_hdr_kind_still_on(self):
+		self.a_4k_broadcom_box(hlg="no", hdr10="auto(EDID)")
+		self.assertTrue(boxSupportsHdr(self.root))
+
+	def test_a_4k_box_with_an_sdr_tv(self):
+		self.a_4k_hisilicon_box()
+		self.touch("/proc/stb/hdmi/raw_edid", _edid([[VIDEO_BLOCK]]))
+		self.assertFalse(boxSupportsHdr(self.root))
+
+	def test_a_4k_box_with_an_hdr_tv(self):
+		self.a_4k_hisilicon_box()
+		self.touch("/proc/stb/hdmi/raw_edid", _edid([[VIDEO_BLOCK, HDR_PQ_HLG]]))
+		self.assertTrue(boxSupportsHdr(self.root))
+
+	def test_a_4k_box_whose_tv_cannot_be_read(self):
+		self.a_4k_hisilicon_box()
+		self.touch("/proc/stb/hdmi/raw_edid", _edid([], declared=1))
+		self.assertTrue(boxSupportsHdr(self.root))
+
+	def test_an_amlogic_box_with_an_sdr_tv(self):
+		self.touch("/proc/stb/video/videomode_choices", "1080p 2160p")
+		self.touch("/sys/class/amhdmitx/amhdmitx0/config", "")
+		self.touch("/sys/class/amhdmitx/amhdmitx0/rawedid", binascii.hexlify(_edid([[VIDEO_BLOCK]])))
+		self.assertFalse(boxSupportsHdr(self.root))
 
 	def test_a_box_with_none_of_them_has_no_hdr(self):
 		self.assertFalse(boxSupportsHdr(self.root))
