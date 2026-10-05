@@ -500,6 +500,45 @@ def getBoxResolution():
 #===============================================================================
 
 
+def boxSupportsHdr(root=""):
+	"""True when the box can show HDR video - the way OpenATV 7.0 and 8.0 tell
+	(Components/AVSwitch): Broadcom boxes have hlg_support_choices, Amlogic
+	ones the amhdmitx config, HiSilicon ones hdmi_hdrtype (with its choices).
+
+	A box without HDR cannot show an HDR stream: a transcode that keeps its
+	BT.2020/HLG signalling comes out black (measured with Emby on a Zgemma
+	H8.2H by the DreamFin fork, 2026-10-05; whether Plex tone-maps it depends
+	on the server). And that very box lists "dolby hdr10 hlg" in its
+	hdmi_hdrtype_choices: a 1080p chip (hi3716mv430) whose driver offers HDR
+	types anyway. So a box that offers no 2160p video mode does not count,
+	whatever its driver lists. root is for the tests."""
+	modes = root + "/proc/stb/video/videomode_choices"
+	if os.path.exists(modes):
+		try:
+			with open(modes) as handle:
+				if "2160p" not in handle.read():
+					return False
+		except (IOError, OSError):
+			pass
+	if os.path.exists(root + "/proc/stb/hdmi/hlg_support_choices"):
+		return True
+	if os.path.exists(root + "/sys/class/amhdmitx/amhdmitx0/config"):
+		return True
+	choices = root + "/proc/stb/video/hdmi_hdrtype_choices"
+	if os.path.exists(choices):
+		try:
+			with open(choices) as handle:
+				offered = handle.read().lower()
+		except (IOError, OSError):
+			offered = ""
+		return "hdr10" in offered or "hlg" in offered
+	return os.path.exists(root + "/proc/stb/video/hdmi_hdrtype")
+
+#===============================================================================
+#
+#===============================================================================
+
+
 def loadSkinParams():
 	printl2("", "__common__::loadSkinParams", "S")
 
@@ -995,7 +1034,8 @@ def buildMediaChoiceName(items):
 	"""Display label for one entry of the "Select media to play" dialog.
 
 	items is one entry of the parts list from getMediaOptionsToPlay():
-	(key, file, container, size, duration[, videoResolution, videoCodec, mediaIndex])
+	(key, file, container, size, duration[, videoResolution, videoCodec, mediaIndex, videoRange])
+	videoRange is "" for SDR, else the HDR kind ("HLG", "HDR10", ...).
 
 	Always returns a native str: on Python 2 the enigma2 listbox renders a
 	unicode label (any non-ascii file name) as "<not a string>".
@@ -1017,6 +1057,8 @@ def buildMediaChoiceName(items):
 		versionBits.append("%s" % (items[5],))
 	if len(items) > 6 and items[6]:
 		versionBits.append("%s" % (items[6],))
+	if len(items) > 8 and items[8]:
+		versionBits.append("%s" % (items[8],))
 	if versionBits:
 		try:
 			if items[3]:

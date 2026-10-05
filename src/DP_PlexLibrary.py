@@ -57,7 +57,7 @@ from Tools.Directories import fileExists, copyfile
 from Screens.Screen import Screen
 
 from .__plugin__ import getPlugin, Plugin
-from .__common__ import printl2 as printl, getXmlContent, getPlexHeader, encodeThat, getUUID, newPlaybackId, revokeCacheFiles
+from .__common__ import printl2 as printl, getXmlContent, getPlexHeader, encodeThat, getUUID, newPlaybackId, revokeCacheFiles, boxSupportsHdr
 from . import _, defaultPluginFolderPath  # _ is translation
 
 #===============================================================================
@@ -87,6 +87,32 @@ seed()
 #===============================================================================
 DEFAULT_PORT = "32400"
 PLEXTV_SERVER = "plex.tv"
+
+#===============================================================================
+#
+#===============================================================================
+
+
+def videoRangeOfPart(part):
+	"""HDR kind of one version, read from its video stream: "DV", "HDR10",
+	"HLG", or "" for SDR.
+
+	Plex puts no range on <Media>: it tells by the video stream's transfer
+	characteristic (colorTrc) and its Dolby Vision flag (DOVIPresent).
+	"""
+	streams = part.getiterator('Stream') if PY2 else part.iter('Stream')
+	for stream in streams:
+		if stream.get('streamType') != "1":
+			continue
+		if stream.get('DOVIPresent') in ("1", "true"):
+			return "DV"
+		transfer = (stream.get('colorTrc') or "").lower()
+		if transfer == "smpte2084":
+			return "HDR10"
+		if transfer == "arib-std-b67":
+			return "HLG"
+		return ""
+	return ""
 
 #===============================================================================
 # PlexLibrary
@@ -2459,12 +2485,13 @@ class PlexLibrary(Screen):
 
 					try:
 						# indexes 0-4 are consumed by DP_Player/mediaType;
-						# 5-6 label the version in the selection dialog and
-						# 7 is the mediaIndex for the universal transcoder
+						# 5-6 label the version in the selection dialog,
+						# 7 is the mediaIndex for the universal transcoder and
+						# 8 the HDR kind ("" for SDR), which labels it too
 						bits = (part.get('key'), part.get('file'), part.get('container'),
 							part.get('size'), part.get('duration'),
 							media.get('videoResolution'), media.get('videoCodec'),
-							mediaIndex)
+							mediaIndex, videoRangeOfPart(part))
 						parts.append(bits)
 						partsCount += 1
 					except Exception as e:
@@ -2590,6 +2617,16 @@ class PlexLibrary(Screen):
 		self.getTranscodeSettings(override)
 		self.server = self.getServerFromURL(vids)
 		self.streams = self.getAudioSubtitlesMedia(self.server, myId, myType, loadExtraData)
+
+		parts = self.streams['parts']
+		if not loadExtraData and len(parts) > 1:
+			ranges = [part[8] if len(part) > 8 else "" for part in parts]
+			if any(ranges) and not all(ranges) and not boxSupportsHdr():
+				# a box without HDR cannot show an HDR version right (black,
+				# when the server does not tone-map), and the dialog opens on
+				# the first entry: SDR first. The choice still travels by each
+				# version's own mediaIndex ([7]), not by its place in this list
+				parts.sort(key=lambda part: 1 if (len(part) > 8 and part[8]) else 0)
 
 		printl("partsCount: " + str(self.streams['partsCount']), self, "D")
 		printl("parts: " + str(self.streams['parts']), self, "D")
