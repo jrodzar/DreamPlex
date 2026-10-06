@@ -399,7 +399,14 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		# asking the server for the media options is a network round trip:
 		# keep it off the enigma2 main loop so the GUI cannot freeze
 		def work():
-			return Singleton().getPlexInstance().getMediaOptionsToPlay(self.media_id, server, False, myType=selection[1]['tagType'])
+			plex = Singleton().getPlexInstance()
+			# the playback type first: getMediaOptionsToPlay() already reads it
+			# (getTranscodeSettings() only builds the client capabilities when
+			# it says "transcode"), so setting it later, in setSelectedMedia(),
+			# left that read on the previous type - with a server configured as
+			# streamed, the first transcoded play sent its capabilities empty
+			plex.setPlaybackType(str(self.playbackMode))
+			return plex.getMediaOptionsToPlay(self.media_id, server, False, myType=selection[1]['tagType'])
 
 		runInThread(work, self.onMediaOptionsReady)
 
@@ -485,8 +492,7 @@ class DP_Player(Screen, InfoBarBase, InfoBarShowHide, InfoBarCueSheetSupport,
 		if len(selectedOption) > 7 and selectedOption[7] is not None:
 			Singleton().getPlexInstance().setSelectedVersion(selectedOption[7])
 
-		Singleton().getPlexInstance().setPlaybackType(str(self.playbackMode))
-
+		# the playback type was set before asking for the options (playMedia)
 		mediaFileUrl = Singleton().getPlexInstance().mediaType({'key': self.options[result][0], 'file': self.options[result][1]}, self.server)
 		printl("We have selected media at " + mediaFileUrl, self, "I")
 
